@@ -14,7 +14,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 from cv.build import _run, check_tools, compose_document, pdf_text
-from cv.profile import public_profile
+from cv.profile import public_profile, require_private_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "resume" / "resume.md"
@@ -26,6 +26,10 @@ def main() -> None:
     parser.add_argument("--copy-to", type=Path, help="folder to copy the built PDF into (the site repo clone)")
     args = parser.parse_args()
     tools = check_tools()
+    try:
+        require_private_profile(ROOT)
+    except ValueError as e:
+        raise SystemExit(str(e))
     profile = public_profile(ROOT)
     out = SOURCE.parent
     with tempfile.TemporaryDirectory() as tmp:

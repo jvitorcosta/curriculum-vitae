@@ -24,7 +24,7 @@ This is my resume kept as code, in public on purpose: an example of a developer 
 - `case-studies/` holds the write-ups published on [my site](https://jvitorcosta.github.io).
 - `cv/` is a small Python CLI (uv, pandoc, Typst) that scaffolds applications, tracks their status and exports ATS-friendly PDF/DOCX.
 - `examples/sample-application/` is a made-up application ("Example Labs") showing what one looks like end to end.
-- `tools/leak_scan.py` runs before every commit and reports `file:line` for anything private that slipped into a tracked file.
+- `tools/leak_scan.py` runs before every commit and reports `file:line` for anything private that slipped into a file about to be committed, PDF and DOCX included.
 
 The personal half (contact details, the applications themselves, the tracker, answers to application forms, internal notes) lives in `private/`, a separate private repo nested in this folder and ignored here. Without it, everything falls back to `profile.example.yaml` and `claims-banned.example.toml`, so a fresh clone still tests and builds.
 

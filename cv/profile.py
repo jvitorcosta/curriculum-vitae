@@ -25,6 +25,14 @@ def load_profile(root: Path) -> dict:
     return profile
 
 
+def require_private_profile(root: Path) -> dict:
+    """The full profile, refusing the example: for builds that overwrite tracked, published files."""
+    if not (root / "private" / "profile.yaml").exists():
+        raise ValueError(f"No {root / 'private' / 'profile.yaml'}: the public resume would be rebuilt with "
+                         "the example contact details. Run this only in a checkout that has private/.")
+    return load_profile(root)
+
+
 def public_profile(root: Path) -> dict:
     """The profile without phone and legal name, for anything published."""
     profile = load_profile(root)

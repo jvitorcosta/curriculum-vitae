@@ -40,3 +40,11 @@ def test_load_profile_requires_name_and_email(tmp_path):
 def test_load_profile_without_any_profile_explains(tmp_path):
     with pytest.raises(ValueError, match="profile.example.yaml"):
         load_profile(tmp_path)
+
+
+def test_require_private_profile_refuses_the_example(tmp_path):
+    import pytest
+    from cv.profile import require_private_profile
+    (tmp_path / "profile.example.yaml").write_text("name: X\nemail: you@example.com\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="profile.yaml"):
+        require_private_profile(tmp_path)

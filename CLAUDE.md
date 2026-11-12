@@ -10,7 +10,7 @@ This repo is public. Everything personal lives in `private/`, a separate private
 - `resume/`: the general resume (`resume.md` plus the built PDF/DOCX, no phone number). The PDF is public on the website: the site repo hosts a copy at its root (`Vitor_Pinheiro_Resume.pdf`). Rebuild with `uv run python tools/build_public_resume.py`, then copy the PDF there too (ask Vitor first: it publishes).
 - `case-studies/<slug>.md`: public case studies for the website (Car Cyberdeck, SolvedOR, resume-as-code). Work projects stay off the site. The site lives at https://jvitorcosta.github.io (repo `jvitorcosta/jvitorcosta.github.io`); this repo writes only the case-study pages, `data/jobs.json`, sitemap and robots (`cv/site.py`). To update: `uv run python tools/build_site.py --copy-to <clone of jvitorcosta.github.io>`, then commit and push there (ask Vitor first: it publishes).
 - `examples/sample-application/`: a made-up application showing `cv build` end to end.
-- `tools/leak_scan.py`: run before every public commit; it reports file:line for anything private found in tracked files.
+- `tools/leak_scan.py`: run before every public commit; it reports file:line for anything private in a file a commit could include (PDF and DOCX text too). Names that are public anyway go in `private/leak-scan-allow.txt`.
 
 ## Tailoring rules
 
