@@ -1,0 +1,10 @@
+# Copy to private/profile.yaml and fill in. private/ is git-ignored.
+name: Vitor Pinheiro
+legal_name: "Your Full Legal Name"   # only used when a form asks for a legal name
+headline_default: AI/ML Software Engineer
+email: you@example.com
+phone: +00 00 00000-0000
+location: Manaus, Brazil (UTC-4, remote)
+links:
+  linkedin: linkedin.com/in/jvpro
+  github: github.com/jvitorcosta

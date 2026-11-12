@@ -1,0 +1,11 @@
+# Example banned-claims list. The real one lives in private/claims-banned.toml (not in this repo):
+# phrases your record does not back, so the claims check stops them reaching a resume.
+# A line that negates the term ("no blockchain", "planned …") passes.
+
+[[banned]]
+pattern = '\bblockchain\b'
+why = 'blockchain is not on record (example)'
+
+[[banned]]
+pattern = '\bkubernetes operators?\b'
+why = 'writing Kubernetes operators is not on record (example)'

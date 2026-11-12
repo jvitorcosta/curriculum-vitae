@@ -1,0 +1,10 @@
+company: Example Labs
+role: ML Engineer
+date: '2026-01-01'
+channel: direct
+url: ''
+status: draft
+notes: A made-up application showing the workflow end to end. Not a real company or posting.
+history:
+- status: draft
+  date: '2026-01-01'

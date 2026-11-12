@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.superpowers/
+*.egg-info/
+private/
+*.stackdump
+site/
+examples/*/out/
