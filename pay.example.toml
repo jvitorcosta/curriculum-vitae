@@ -1,0 +1,9 @@
+# Example pay parameters for `cv pay`. Copy to private/salary/pay.toml and put your real numbers there.
+simples_rate_domestic = 0.06    # effective Simples rate on a domestic invoice
+simples_rate_export = 0.0305    # effective Simples rate on an export invoice
+prolabore = 4500                # monthly pro-labore (BRL)
+accountant_fee = 300            # monthly accountant fee (BRL)
+deel_fee_pct = 0.012            # platform fee on USD invoices
+usd_brl = 5.0                   # exchange rate used for USD offers
+floor_brl_net = 10000           # minimum monthly take-home in BRL
+floor_usd = 4000                # minimum monthly invoice in USD

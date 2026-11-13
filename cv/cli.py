@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 from cv.build import ToolMissing, build_outputs, pdf_text
+from cv import pay
 from cv.meta import MetaError, load_meta, save_meta, set_status
 from cv.profile import load_profile
 from cv.scaffold import new_application
@@ -96,6 +97,43 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _brl(v) -> str:
+    return "R$ " + f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def cmd_pay(args: argparse.Namespace) -> int:
+    try:
+        params, fell_back = pay.load_params(ROOT)
+        tables = pay.load_tables(pay.latest_year())
+        amount = pay.parse_money(args.amount)
+        benefits = pay.parse_money(getattr(args, "benefits", "0"))
+    except (OSError, ValueError) as e:
+        print(f"Invalid pay input or config (amount {args.amount!r}): {e}", file=sys.stderr)
+        return 1
+    if fell_back:
+        print("using pay.example.toml (no private/salary/pay.toml)", file=sys.stderr)
+    if args.kind == "target":
+        for label, contract in (("CLT", "clt"), ("PJ", "pj"), ("USD", "usd")):
+            gross = pay.gross_for_net(contract, amount, params, tables)
+            shown = f"USD {gross:,.2f}" if contract == "usd" else _brl(gross)
+            print(f"{label}: {shown} / month for {_brl(amount)} net")
+        return 0
+    if args.kind == "clt":
+        net = pay.clt_net(amount, tables)
+        print(f"CLT gross {_brl(amount)} -> monthly net {_brl(net)}")
+        print(f"Annualized net (13th + vacation third + benefits) {_brl(pay.clt_annualized(amount, tables, benefits))}")
+    elif args.kind == "pj":
+        net = pay.pj_net(amount, params, tables, export=args.export)
+        print(f"PJ invoice {_brl(amount)}{' (export)' if args.export else ''} -> monthly net {_brl(net)}")
+    else:
+        net = pay.usd_net(amount, params, tables)
+        print(f"USD invoice {amount:,.2f} -> monthly net {_brl(net)} at {params.usd_brl} BRL/USD")
+    ok = pay.meets_floor(args.kind, amount, params, tables)
+    floor = f"USD {params.floor_usd:,.0f} invoice" if args.kind == "usd" else f"{_brl(params.floor_brl_net)} net"
+    print(f"Floor ({floor}): {'meets' if ok else 'BELOW'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cv")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -121,6 +159,19 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("build", help="export resume and cover letter to PDF and DOCX")
     p.add_argument("folder")
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser("pay", help="convert an offer to monthly net, or a target net to gross")
+    pay_sub = p.add_subparsers(dest="kind", required=True)
+    for kind in ("clt", "pj", "usd"):
+        q = pay_sub.add_parser(kind, help=f"monthly net of a {kind.upper()} offer")
+        q.add_argument("amount")
+        if kind == "clt":
+            q.add_argument("--benefits", default="0", help="monthly benefits in BRL added to the annualized figure")
+        if kind == "pj":
+            q.add_argument("--export", action="store_true", help="use the export Simples rate")
+    q = pay_sub.add_parser("target", help="gross needed per contract for a monthly net")
+    q.add_argument("amount")
+    p.set_defaults(func=cmd_pay)
 
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
