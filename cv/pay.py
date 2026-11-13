@@ -104,15 +104,15 @@ def load_params(root: Path) -> tuple[PayParams, bool]:
 
 
 def inss(gross: Decimal, t: Tables) -> Decimal:
-    """Employee INSS: progressive slices, each rounded to cents, nothing above the ceiling."""
+    """Employee INSS: progressive slices summed unrounded, total rounded once; nothing above the ceiling."""
     base = min(gross, t.inss_ceiling)
     total, lower = Decimal(0), Decimal(0)
     for upto, rate in t.inss:
         if base <= lower:
             break
-        total += _cents((min(base, upto) - lower) * rate)
+        total += (min(base, upto) - lower) * rate
         lower = upto
-    return total
+    return _cents(total)
 
 
 def irrf(gross: Decimal, t: Tables, inss_paid: Decimal | None = None) -> Decimal:
@@ -164,11 +164,11 @@ def usd_net(usd: Decimal, p: PayParams, t: Tables) -> Decimal:
     return pj_net(_cents(usd * (1 - p.deel_fee_pct) * p.usd_brl), p, t, export=True)
 
 
-def _net_of(contract: Contract, amount: Decimal, p: PayParams, t: Tables) -> Decimal:
+def _net_of(contract: Contract, amount: Decimal, p: PayParams, t: Tables, export: bool = False) -> Decimal:
     if contract == "clt":
         return clt_net(amount, t)
     if contract == "pj":
-        return pj_net(amount, p, t)
+        return pj_net(amount, p, t, export=export)
     return usd_net(amount, p, t)
 
 
@@ -184,7 +184,7 @@ def gross_for_net(contract: Contract, target_net: Decimal, p: PayParams, t: Tabl
     return _cents(hi)
 
 
-def meets_floor(contract: Contract, amount: Decimal, p: PayParams, t: Tables) -> bool:
+def meets_floor(contract: Contract, amount: Decimal, p: PayParams, t: Tables, *, export: bool = False) -> bool:
     if contract == "usd":
         return amount >= p.floor_usd
-    return _net_of(contract, amount, p, t) >= p.floor_brl_net
+    return _net_of(contract, amount, p, t, export) >= p.floor_brl_net
