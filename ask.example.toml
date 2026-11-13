@@ -1,13 +1,13 @@
 # Example config for `cv ask`. Copy to private/salary/ask.toml and tune it there.
 # The ask is low + position * (high - low), where
-#   position = w_company * company_score + w_role * role_score, then pulled toward the middle:
-#   position = position + nudge * (0.5 - position)
+#   position = w_company * company_score + w_role * role_score, then, above the middle only, pulled down:
+#   position = position - nudge * max(position - 0.5, 0)
 # Scores are 0-1 weighted means of the known signals; unknown signals are left out.
 # `cv ask calibrate` suggests w_company, w_role and nudge from your corrections. It never edits this file.
 
-w_company = 0.4
-w_role = 0.6    # w_company + w_role must be 1
-nudge = 0.1     # get-hired nudge, 0 = none, 1 = always the band's middle
+w_company = 0.3
+w_role = 0.7    # w_company + w_role must be 1
+nudge = 0.1     # get-hired nudge on high asks: 0 = none, 1 = never above the band's middle
 
 # Monthly bands per company type and contract: [low, high], BRL for clt/pj, USD for contractor.
 # Used unless the observation log has at least 3 market rows for the same type and contract.
@@ -37,25 +37,27 @@ clt = 30000
 pj = 30000
 contractor = 9000
 
-# Signal maps. `steps` = [[at least, value], ...]: the value of the last threshold the signal reaches.
+# Signal maps. Values are relative to the company type, whose band already prices it in:
+# a typical company of its type scores low, and only standouts score high.
+# `steps` = [[at least, value], ...]: the value of the last threshold the signal reaches.
 # `values` = a value per label. `weight` = the signal's weight in its score's mean.
 
 # Company signals
 [signals.size]          # employees
 weight = 1
-steps = [[0, 0.0], [100, 0.1], [500, 0.2], [5000, 0.8], [10000, 1.0]]
+steps = [[0, 0.0], [500, 0.1], [5000, 0.8], [10000, 1.0]]
 
 [signals.rating]        # Glassdoor, 0-5
 weight = 1
-steps = [[0, 0.0], [3.5, 0.2], [4.0, 0.6], [4.3, 1.0]]
+steps = [[0, 0.0], [3.5, 0.1], [4.0, 0.6], [4.3, 1.0]]
 
 [signals.reach]
 weight = 1
-values = { local = 0.0, national = 0.2, multinational = 0.8, usd-payer = 1.0 }
+values = { local = 0.0, national = 0.1, multinational = 0.8, usd-payer = 1.0 }
 
 [signals.maturity]
 weight = 1
-values = { early = 0.0, growth = 0.3, established = 1.0 }
+values = { early = 0.0, growth = 0.1, established = 1.0 }
 
 # Role signals
 [signals.years]         # years of experience the posting asks for

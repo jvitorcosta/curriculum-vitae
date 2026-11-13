@@ -268,9 +268,12 @@ def propose(s: Signals, cfg: AskConfig, params: pay.PayParams, tables: pay.Table
     role, role_steps = role_score(s, cfg)
     steps += company_steps + role_steps
     raw_position = cfg.w_company * company + cfg.w_role * role
-    position = raw_position + cfg.nudge * (HALF - raw_position)
+    # The get-hired nudge only pulls high positions toward the middle; it never raises a low ask.
+    position = raw_position - cfg.nudge * max(raw_position - HALF, Decimal(0))
+    nudged = (f"nudged {cfg.nudge} toward the middle = {position:.3f}" if position != raw_position
+              else "below the middle, so no nudge")
     steps.append(Step("position", f"{cfg.w_company} x {company:.2f} + {cfg.w_role} x {role:.2f} = {raw_position:.3f}, "
-                                  f"nudged {cfg.nudge} toward the middle = {position:.3f}"))
+                                  f"{nudged}"))
 
     ask = low + position * (high - low)
     ceiling = cfg.ceilings.get(s.contract)
