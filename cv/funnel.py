@@ -1,7 +1,9 @@
 """Funnel stats: which channels, score bands and company types produce replies."""
 
 import datetime
+import math
 import statistics
+from collections import Counter
 from dataclasses import dataclass
 from typing import Literal
 
@@ -29,8 +31,10 @@ class Bucket:
 
 def score_band(score: str) -> str:
     try:
-        v = float(score)
+        v = float(str(score).strip().replace(",", "."))
     except (TypeError, ValueError):
+        return "unscored"
+    if not math.isfinite(v) or not 0 <= v <= 5:
         return "unscored"
     if v >= 4.5:
         return "4.5+"
@@ -42,7 +46,7 @@ def score_band(score: str) -> str:
 
 
 def _yielded(m: AppMeta) -> bool:
-    return any(h.get("status") in YIELD for h in m.history)
+    return m.status in YIELD or any(h.get("status") in YIELD for h in m.history)
 
 
 def _key(m: AppMeta, by: str) -> str:
@@ -51,16 +55,23 @@ def _key(m: AppMeta, by: str) -> str:
     return (getattr(m, by) or "").strip() or "(none)"
 
 
+def _sent(metas: list[AppMeta], since: datetime.date | None) -> list[AppMeta]:
+    """Applications that were actually sent (not draft/withdrawn), on or after `since`."""
+    return [m for m in metas if m.status not in NOT_SENT and not (since and m.date < since.isoformat())]
+
+
 def funnel(metas: list[AppMeta], by: By, since: datetime.date | None = None) -> list[Bucket]:
     groups: dict[str, list[AppMeta]] = {}
-    for m in metas:
-        if m.status in NOT_SENT:
-            continue
-        if since and m.date < since.isoformat():
-            continue
-        groups.setdefault(_key(m, by), []).append(m)
+    spellings: dict[str, Counter[str]] = {}
+    for m in _sent(metas, since):
+        key = _key(m, by)
+        folded = " ".join(key.casefold().split())
+        groups.setdefault(folded, []).append(m)
+        spellings.setdefault(folded, Counter())[key] += 1
     buckets = []
-    for key, ms in groups.items():
+    for folded, ms in groups.items():
+        # most common original spelling; ties go to the alphabetically first
+        key = min(spellings[folded].items(), key=lambda kv: (-kv[1], kv[0]))[0]
         sent, yielded = len(ms), sum(_yielded(m) for m in ms)
         buckets.append(Bucket(
             key=key, sent=sent, yielded=yielded,
@@ -72,16 +83,19 @@ def funnel(metas: list[AppMeta], by: By, since: datetime.date | None = None) -> 
     return buckets
 
 
-def median_days_to_yield(metas: list[AppMeta]) -> float | None:
+def median_days_to_yield(metas: list[AppMeta], since: datetime.date | None = None) -> float | None:
+    """Median days from application to the first screening/interview/offer, over the same set as the table."""
     days = []
-    for m in metas:
+    for m in _sent(metas, since):
         dates = [h["date"] for h in m.history if h.get("status") in YIELD and h.get("date")]
         if not dates:
             continue
         try:
-            days.append((datetime.date.fromisoformat(min(dates)) - datetime.date.fromisoformat(m.date)).days)
+            delta = (datetime.date.fromisoformat(min(dates)) - datetime.date.fromisoformat(m.date)).days
         except ValueError:
             continue
+        if delta >= 0:
+            days.append(delta)
     return float(statistics.median(days)) if days else None
 
 
@@ -90,5 +104,5 @@ def render_funnel(buckets: list[Bucket], median: float | None) -> str:
     for b in buckets:
         key = b.key if b.sufficient else f"{b.key} (small sample)"
         lines.append(f"| {key} | {b.sent} | {b.yielded} | {b.rate:.0%} | {b.rejected} | {b.ghosted} | {b.open} |")
-    lines += ["", "Median days to first reply: " + (f"{median:g}" if median is not None else "n/a")]
+    lines += ["", "Median days to first screening/interview: " + (f"{median:g}" if median is not None else "n/a")]
     return "\n".join(lines)

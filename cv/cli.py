@@ -4,12 +4,13 @@ import argparse
 import datetime
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import yaml
 
-from cv.build import ToolMissing, build_outputs, pdf_text
 from cv import pay
+from cv.build import ToolMissing, build_outputs, pdf_text
 from cv.funnel import BY, funnel, median_days_to_yield, render_funnel
 from cv.history import blocks, find_matches
 from cv.meta import MetaError, load_meta, save_meta, set_status
@@ -105,12 +106,16 @@ def _brl(v) -> str:
 
 def cmd_pay(args: argparse.Namespace) -> int:
     try:
-        params, fell_back = pay.load_params(ROOT)
-        tables = pay.load_tables(pay.latest_year())
         amount = pay.parse_money(args.amount)
         benefits = pay.parse_money(getattr(args, "benefits", "0"))
-    except (OSError, ValueError) as e:
-        print(f"Invalid pay input or config (amount {args.amount!r}): {e}", file=sys.stderr)
+    except ValueError as e:
+        print(f"Invalid amount {args.amount!r}: {e}", file=sys.stderr)
+        return 1
+    try:
+        params, fell_back = pay.load_params(ROOT)
+        tables = pay.load_tables(pay.latest_year())
+    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError) as e:
+        print(f"Pay config problem: {e!r}" if isinstance(e, KeyError) else f"Pay config problem: {e}", file=sys.stderr)
         return 1
     if fell_back:
         print("using pay.example.toml (no private/salary/pay.toml)", file=sys.stderr)
@@ -137,7 +142,9 @@ def cmd_pay(args: argparse.Namespace) -> int:
 
 
 def cmd_seen(args: argparse.Namespace) -> int:
-    rows, _ = collect(_private())
+    rows, errors = collect(_private())
+    for e in errors:
+        print(f"needs fixing: {e}", file=sys.stderr)
     matches = find_matches(rows, args.company, datetime.date.today())
     for m in matches:
         print(f"{m.date} · {m.status} · {m.role} · {m.reason} · {m.folder.name}")
@@ -145,7 +152,10 @@ def cmd_seen(args: argparse.Namespace) -> int:
         print(f"No earlier application to {args.company}")
     if args.role:
         print(f"Role being considered: {args.role}")
-    return 3 if blocks(matches, args.role) else 0
+    if blocks(matches, args.role):
+        return 3
+    # An unreadable meta.yaml may hide a recent application: never report that as clear.
+    return 1 if errors else 0
 
 
 def cmd_funnel(args: argparse.Namespace) -> int:
@@ -156,9 +166,11 @@ def cmd_funnel(args: argparse.Namespace) -> int:
         except ValueError:
             print(f"Invalid --since {args.since!r}: use YYYY-MM-DD", file=sys.stderr)
             return 1
-    rows, _ = collect(_private())
+    rows, errors = collect(_private())
     metas = [m for _, m in rows]
-    print(render_funnel(funnel(metas, args.by, since), median_days_to_yield(metas)))
+    print(render_funnel(funnel(metas, args.by, since), median_days_to_yield(metas, since)))
+    for e in errors:
+        print(f"needs fixing: {e}", file=sys.stderr)
     return 0
 
 

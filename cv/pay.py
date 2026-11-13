@@ -3,7 +3,7 @@
 import re
 import tomllib
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
 
@@ -12,8 +12,11 @@ CENT = Decimal("0.01")
 TABLES_DIR = Path(__file__).parent / "pay_tables"
 
 
-def _dec(value: object) -> Decimal:
-    return Decimal(str(value))
+def _dec(value: object, key: str = "value") -> Decimal:
+    try:
+        return Decimal(str(value))
+    except InvalidOperation:
+        raise ValueError(f"{key} must be a number, got {value!r}") from None
 
 
 def _cents(value: Decimal) -> Decimal:
@@ -43,32 +46,40 @@ class PayParams:
 
 
 def parse_money(text: str) -> Decimal:
-    """Parse '15000', '15.000,00', '15,000.00', '15k', 'R$ 15.000', 'USD 4,500'.
+    """Parse '15000', '15.000,00', '15,000.00', '15k', '4,5k', 'R$ 15.000', 'USD 4,500'.
 
     A lone separator followed by exactly three digits is a thousands separator ('15.000');
-    otherwise it is a decimal mark ('14,5').
+    otherwise it is a decimal mark ('14,5'). A repeated separator must always group by three
+    ('1.234.567'); anything else ('15.000.00') is rejected rather than guessed.
     """
-    s = re.sub(r"[^\d.,kK]", "", text)
-    multiplier = Decimal(1)
-    if s[-1:] in ("k", "K"):
-        multiplier = Decimal(1000)
-        s = s[:-1]
-    if not re.fullmatch(r"[\d.,]*\d[\d.,]*", s):
+    m = re.fullmatch(r"\s*(?:R\$|US\$|USD|BRL|\$)?\s*([\d.,\s]*\d[\d.,\s]*?)\s*([kK])?\s*", text, re.IGNORECASE)
+    if not m:
         raise ValueError(f"Not an amount: {text!r}")
+    s = re.sub(r"\s", "", m.group(1))
+    multiplier = Decimal(1000) if m.group(2) else Decimal(1)
+    bad = ValueError(f"Not an amount (check the digit grouping): {text!r}")
     dot, comma = s.rfind("."), s.rfind(",")
     if dot >= 0 and comma >= 0:
-        decimal_mark = "." if dot > comma else ","
+        mark, thousands = (".", ",") if dot > comma else (",", ".")
+        int_part, _, frac = s.rpartition(mark)
+        if not frac or not re.fullmatch(rf"\d+|\d{{1,3}}(?:\{thousands}\d{{3}})+", int_part):
+            raise bad
+        digits = int_part.replace(thousands, "") + "." + frac
     else:
         sep = "." if dot >= 0 else "," if comma >= 0 else ""
-        if not sep or s.count(sep) > 1 or re.fullmatch(rf"\d{{1,3}}\{sep}\d{{3}}", s):
-            decimal_mark = ""
+        if not sep:
+            digits = s
+        elif s.count(sep) > 1:
+            if not re.fullmatch(rf"\d{{1,3}}(?:\{sep}\d{{3}})+", s):
+                raise bad
+            digits = s.replace(sep, "")
+        elif re.fullmatch(rf"\d{{1,3}}\{sep}\d{{3}}", s):
+            digits = s.replace(sep, "")
         else:
-            decimal_mark = sep
-    if decimal_mark:
-        int_part, _, frac = s.rpartition(decimal_mark)
-        digits = re.sub(r"\D", "", int_part) + "." + re.sub(r"\D", "", frac)
-    else:
-        digits = re.sub(r"\D", "", s)
+            int_part, _, frac = s.partition(sep)
+            if not int_part or not frac:
+                raise bad
+            digits = int_part + "." + frac
     return Decimal(digits) * multiplier
 
 
@@ -100,7 +111,7 @@ def load_params(root: Path) -> tuple[PayParams, bool]:
     missing = [k for k in fields if k not in raw]
     if missing:
         raise ValueError(f"{path.name} is missing: {', '.join(missing)}")
-    return PayParams(**{k: _dec(raw[k]) for k in fields}), fell_back
+    return PayParams(**{k: _dec(raw[k], k) for k in fields}), fell_back
 
 
 def inss(gross: Decimal, t: Tables) -> Decimal:

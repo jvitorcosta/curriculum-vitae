@@ -109,3 +109,20 @@ def test_apply_window_edges(tmp_path):
 
 def test_apply_window_edge_plus_one(tmp_path):
     assert _reason(tmp_path, (("applied", "2026-05-16"),), "2026-05-16") == "older application"
+
+
+def test_cli_seen_unreadable_meta_is_not_all_clear(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    bad = tmp_path / "private" / "applications" / "2026-01-01-acme-eng"
+    bad.mkdir(parents=True)
+    (bad / "meta.yaml").write_text("company: [unclosed" + chr(10), encoding="utf-8")
+    assert cli.main(["seen", "Acme"]) == 1
+    assert "needs fixing" in capsys.readouterr().err
+    _app(tmp_path, "Acme", "ML Engineer", "2026-11-11", ("applied", "2026-11-11"))
+    assert cli.main(["seen", "Acme"]) == 3  # a blocking match still wins
+
+
+def test_same_company_empty_names_never_match():
+    from cv.history import _same_company
+    assert not _same_company("", "")
+    assert not _same_company("&&", "&&")
