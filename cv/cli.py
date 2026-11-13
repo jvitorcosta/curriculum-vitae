@@ -128,7 +128,7 @@ def cmd_pay(args: argparse.Namespace) -> int:
     else:
         net = pay.usd_net(amount, params, tables)
         print(f"USD invoice {amount:,.2f} -> monthly net {_brl(net)} at {params.usd_brl} BRL/USD")
-    ok = pay.meets_floor(args.kind, amount, params, tables)
+    ok = pay.meets_floor(args.kind, amount, params, tables, export=getattr(args, "export", False))
     floor = f"USD {params.floor_usd:,.0f} invoice" if args.kind == "usd" else f"{_brl(params.floor_brl_net)} net"
     print(f"Floor ({floor}): {'meets' if ok else 'BELOW'}")
     return 0

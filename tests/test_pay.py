@@ -195,3 +195,18 @@ def test_cli_pay_bad_amount(tmp_path, monkeypatch, capsys):
     (tmp_path / "pay.example.toml").write_text(EXAMPLE, encoding="utf-8")
     assert cli.main(["pay", "pj", "abc"]) == 1
     assert "amount" in capsys.readouterr().err.lower()
+
+
+def test_inss_max_contribution_real_2026_rounds_once():
+    # 121.575 + 115.3656 + 174.1716 + 576.9792 = 988.0914 -> 988.09 (summed from the official brackets)
+    t = load_tables(2026)
+    assert inss(D("8475.55"), t) == inss(D(20000), t) == D("988.09")
+
+
+def test_floor_honours_export_rate(params, tables):
+    # find an invoice that clears the floor only at the export rate
+    domestic = gross_for_net("pj", params.floor_brl_net, params, tables)
+    amount = domestic - D(100)
+    assert pj_net(amount, params, tables, export=True) >= params.floor_brl_net
+    assert not meets_floor("pj", amount, params, tables)
+    assert meets_floor("pj", amount, params, tables, export=True)
