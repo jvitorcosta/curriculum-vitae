@@ -24,7 +24,6 @@ def _rows(root):
 
 def test_applied_within_window_matches_across_suffix_and_parens(tmp_path):
     _app(tmp_path, "Acme (Labs)", "ML Engineer", "2026-11-11", ("applied", "2026-11-11"))
-    _app(tmp_path, "Bit&Co", "ML Engineer", "2026-09-01", ("applied", "2026-09-01"), ("rejected", "2026-09-01"))
     rows = _rows(tmp_path)
     [m] = find_matches(rows, "Acme Digital", TODAY)
     assert isinstance(m, Match)
@@ -74,3 +73,39 @@ def test_cli_seen_exit_codes(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "applied within 180 days" in out and "ML Engineer" in out
     assert cli.main(["seen", "Globex"]) == 0
+
+
+def test_short_first_token_matches_by_concatenated_name(tmp_path):
+    _app(tmp_path, "XY&Z", "ML Engineer", "2026-08-20", ("applied", "2026-08-20"), ("rejected", "2026-09-01"))
+    rows = _rows(tmp_path)
+    for query in ("XY Z", "XY&Z", "XYZ"):
+        [m] = find_matches(rows, query, TODAY)
+        assert m.reason == "rejected within 90 days"
+        assert blocks([m], "ML Engineer")
+    assert find_matches(rows, "XYZW Labs", TODAY) == []
+
+
+def _reason(tmp_path, status_chain, applied, today=TODAY):
+    _app(tmp_path, "Acme (Labs)", "ML Engineer", applied, *status_chain)
+    [m] = find_matches(_rows(tmp_path), "Acme", today)
+    return m.reason
+
+
+def test_reject_window_edges(tmp_path):
+    # 2026-11-13 minus 90 days = 2026-08-15; minus 91 = 2026-08-14
+    chain = (("applied", "2026-06-01"), ("rejected", "2026-08-15"))
+    assert _reason(tmp_path, chain, "2026-06-01") == "rejected within 90 days"
+
+
+def test_reject_window_edge_plus_one(tmp_path):
+    chain = (("applied", "2026-06-01"), ("rejected", "2026-08-14"))
+    assert _reason(tmp_path, chain, "2026-06-01") == "older application"
+
+
+def test_apply_window_edges(tmp_path):
+    # 2026-11-13 minus 180 days = 2026-05-17; minus 181 = 2026-05-16
+    assert _reason(tmp_path, (("applied", "2026-05-17"),), "2026-05-17") == "applied within 180 days"
+
+
+def test_apply_window_edge_plus_one(tmp_path):
+    assert _reason(tmp_path, (("applied", "2026-05-16"),), "2026-05-16") == "older application"
