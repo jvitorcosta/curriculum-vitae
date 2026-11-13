@@ -1,0 +1,76 @@
+from datetime import date
+
+from cv import cli
+from cv.history import Match, blocks, find_matches
+from cv.meta import load_meta, save_meta, set_status
+from cv.scaffold import new_application
+from cv.tracker import collect
+
+TODAY = date(2026, 11, 13)
+
+
+def _app(root, company, role, day, *statuses):
+    folder = new_application(root / "private", company, role, day)
+    meta = load_meta(folder / "meta.yaml")
+    for status, status_day in statuses:
+        set_status(meta, status, status_day)
+    save_meta(folder / "meta.yaml", meta)
+    return folder
+
+
+def _rows(root):
+    return collect(root / "private")[0]
+
+
+def test_applied_within_window_matches_across_suffix_and_parens(tmp_path):
+    _app(tmp_path, "Acme (Labs)", "ML Engineer", "2026-11-11", ("applied", "2026-11-11"))
+    _app(tmp_path, "Bit&Co", "ML Engineer", "2026-09-01", ("applied", "2026-09-01"), ("rejected", "2026-09-01"))
+    rows = _rows(tmp_path)
+    [m] = find_matches(rows, "Acme Digital", TODAY)
+    assert isinstance(m, Match)
+    assert m.company == "Acme (Labs)" and m.reason == "applied within 180 days"
+    assert m.last_status_date == "2026-11-11"
+
+
+def test_rejected_within_window_matches_spaced_ampersand_name(tmp_path):
+    _app(tmp_path, "Bit&Co", "ML Engineer", "2026-08-20", ("applied", "2026-08-20"), ("rejected", "2026-09-01"))
+    [m] = find_matches(_rows(tmp_path), "Bit Co", TODAY)
+    assert m.reason == "rejected within 90 days"
+    assert m.last_status_date == "2026-09-01"
+    assert blocks([m], "ML Engineer")
+
+
+def test_rejected_long_ago_does_not_block(tmp_path):
+    _app(tmp_path, "Bit&Co", "ML Engineer", "2026-06-20", ("applied", "2026-06-20"), ("rejected", "2026-07-01"))
+    [m] = find_matches(_rows(tmp_path), "Bit Co", TODAY)
+    assert m.reason == "older application"
+    assert not blocks([m], "ML Engineer")
+
+
+def test_old_application_is_older_and_does_not_block(tmp_path):
+    _app(tmp_path, "Acme (Labs)", "ML Engineer", "2025-03-01", ("applied", "2025-03-01"))
+    [m] = find_matches(_rows(tmp_path), "Acme", TODAY)
+    assert m.reason == "older application"
+    assert not blocks([m], "ML Engineer")
+
+
+def test_drafts_and_other_companies_are_ignored(tmp_path):
+    _app(tmp_path, "Acme (Labs)", "ML Engineer", "2026-11-11")
+    _app(tmp_path, "Orbital", "ML Engineer", "2026-11-11", ("applied", "2026-11-11"))
+    rows = _rows(tmp_path)
+    assert find_matches(rows, "Acme Digital", TODAY) == []
+    assert find_matches(rows, "Orb", TODAY) == []
+    assert find_matches(rows, "Bit Co", TODAY) == []
+
+
+def test_blocks_false_for_no_matches():
+    assert not blocks([], "ML Engineer")
+
+
+def test_cli_seen_exit_codes(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    _app(tmp_path, "Acme (Labs)", "ML Engineer", "2026-11-11", ("applied", "2026-11-11"))
+    assert cli.main(["seen", "Acme Digital", "Staff Engineer"]) == 3
+    out = capsys.readouterr().out
+    assert "applied within 180 days" in out and "ML Engineer" in out
+    assert cli.main(["seen", "Globex"]) == 0
