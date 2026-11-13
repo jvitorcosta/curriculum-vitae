@@ -10,6 +10,7 @@ import yaml
 
 from cv.build import ToolMissing, build_outputs, pdf_text
 from cv import pay
+from cv.history import blocks, find_matches
 from cv.meta import MetaError, load_meta, save_meta, set_status
 from cv.profile import load_profile
 from cv.scaffold import new_application
@@ -134,6 +135,18 @@ def cmd_pay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_seen(args: argparse.Namespace) -> int:
+    rows, _ = collect(_private())
+    matches = find_matches(rows, args.company, datetime.date.today())
+    for m in matches:
+        print(f"{m.date} · {m.status} · {m.role} · {m.reason} · {m.folder.name}")
+    if not matches:
+        print(f"No earlier application to {args.company}")
+    if args.role:
+        print(f"Role being considered: {args.role}")
+    return 3 if blocks(matches, args.role) else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cv")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -172,6 +185,11 @@ def main(argv: list[str] | None = None) -> int:
     q = pay_sub.add_parser("target", help="gross needed per contract for a monthly net")
     q.add_argument("amount")
     p.set_defaults(func=cmd_pay)
+
+    p = sub.add_parser("seen", help="check whether a company was applied to recently")
+    p.add_argument("company")
+    p.add_argument("role", nargs="?", default="")
+    p.set_defaults(func=cmd_seen)
 
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
