@@ -59,8 +59,8 @@ def params():
 
 def test_parse_money_formats():
     for s in ["15000", "15.000,00", "15,000.00", "15k", "R$ 15.000", " 15 000 "]:
-        assert parse_money(s) == Decimal("15000")
-    assert parse_money("USD 4,500") == Decimal("4500")
+        assert parse_money(s) == Decimal(15000)
+    assert parse_money("USD 4,500") == Decimal(4500)
 
 
 def test_parse_money_never_inflates_br_format():
@@ -79,11 +79,11 @@ def test_parse_money_rejects_garbage():
 
 def test_inss_capped_above_ceiling(tables):
     # 10% of 2,000 + 20% of 3,000 = 800, and nothing more above the 5,000 ceiling
-    assert inss(Decimal(9000), tables) == inss(Decimal(5000), tables) == Decimal("800")
+    assert inss(Decimal(9000), tables) == inss(Decimal(5000), tables) == Decimal(800)
 
 
 def test_inss_bracket_boundary(tables):
-    assert inss(Decimal(2000), tables) == Decimal("200")
+    assert inss(Decimal(2000), tables) == Decimal(200)
     assert inss(Decimal("2000.01"), tables) == Decimal("200.00")  # 0.01 x 20% rounds to 0.00
 
 
@@ -101,7 +101,7 @@ def test_irrf_reduction_exempts_up_to_5000():
 
 def test_irrf_reduction_partial_and_none_above():
     t = load_tables(2026)
-    assert D(0) < irrf(D(6000), t) < D(394.54) + D(500)
+    assert irrf(D(6000), t) == D("385.10")
     # above 7,350 the full table applies, no reduction
     base = D(8000) - inss(D(8000), t)
     full = (base * D("0.275") - D("908.73")).quantize(D("0.01"))
@@ -210,3 +210,34 @@ def test_floor_honours_export_rate(params, tables):
     assert pj_net(amount, params, tables, export=True) >= params.floor_brl_net
     assert not meets_floor("pj", amount, params, tables)
     assert meets_floor("pj", amount, params, tables, export=True)
+
+
+def test_parse_money_rejects_malformed_grouping_and_junk():
+    for s in ["15.000.00", "15,000,00", "1.234.56", "15 mil", "1O000", "-5", "15kk", "12abc"]:
+        with pytest.raises(ValueError):
+            parse_money(s)
+
+
+def test_parse_money_pins_valid_forms():
+    assert parse_money("4,5k") == D(4500)
+    assert parse_money("15,000") == D(15000)
+    assert parse_money("1.234.567") == D(1234567)
+    assert parse_money("1.234.567,89") == D("1234567.89")
+    for s in ["R$ 15.000", "USD 15000", "BRL 15k", "US$15,000", "$15000"]:
+        assert parse_money(s) == D(15000)
+
+
+def test_cli_pay_bad_config_value_names_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / "pay.example.toml").write_text(EXAMPLE.replace("usd_brl = 5.0", 'usd_brl = "abc"'), encoding="utf-8")
+    assert cli.main(["pay", "clt", "10000"]) == 1
+    err = capsys.readouterr().err
+    assert "usd_brl" in err and "Traceback" not in err
+
+
+def test_cli_pay_bad_amount_reports_amount_not_config(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / "pay.example.toml").write_text(EXAMPLE, encoding="utf-8")
+    assert cli.main(["pay", "clt", "15 mil"]) == 1
+    err = capsys.readouterr().err
+    assert "15 mil" in err and "config" not in err.lower()

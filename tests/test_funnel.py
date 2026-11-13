@@ -70,3 +70,46 @@ def test_cli_funnel(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "LinkedIn" in out and "(small sample)" in out and "Median" in out
     assert cli.main(["funnel", "--since", "bad"]) == 1
+
+
+def test_since_and_median_use_same_set():
+    old = meta("screening", [("screening", "2026-01-30")], date="2025-01-01")  # 394 days, excluded by since
+    new = meta("screening", [("screening", "2026-02-04")], date="2026-02-01")  # 3 days
+    draft = meta("draft", [("screening", "2026-02-20")], date="2026-02-01")  # not sent
+    metas = [old, new, draft]
+    assert median_days_to_yield(metas, since=datetime.date(2026, 1, 1)) == 3.0
+
+
+def test_median_skips_negative_and_unsent():
+    neg = meta("screening", [("screening", "2026-01-01")], date="2026-01-05")
+    ok = meta("screening", [("screening", "2026-01-04")], date="2026-01-01")
+    wd = meta("withdrawn", [("screening", "2026-03-01")], date="2026-01-01")
+    assert median_days_to_yield([neg, ok, wd]) == 3.0
+
+
+def test_buckets_case_insensitive_with_common_spelling():
+    metas = [meta(channel="LinkedIn"), meta(channel="LinkedIn"), meta(channel="linkedin "), meta(channel="Referral")]
+    b = by_key(funnel(metas, "channel"))
+    assert set(b) == {"LinkedIn", "Referral"}
+    assert b["LinkedIn"].sent == 3
+
+
+def test_yielded_by_current_status_without_history():
+    assert funnel([meta("interview")], "channel")[0].yielded == 1
+
+
+def test_score_band_edge_inputs():
+    for s in ["nan", "inf", "-inf", "5.1", "-1", "6"]:
+        assert score_band(s) == "unscored"
+    assert score_band("4,3") == "4.0–4.4"
+    assert score_band("5") == "4.5+"
+    assert score_band("0") == "<3.0"
+
+
+def test_cli_funnel_reports_unreadable_meta(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    bad = tmp_path / "private" / "applications" / "2026-01-01-acme-eng"
+    bad.mkdir(parents=True)
+    (bad / "meta.yaml").write_text("company: [unclosed" + chr(10), encoding="utf-8")
+    assert cli.main(["funnel"]) == 0
+    assert "needs fixing" in capsys.readouterr().err

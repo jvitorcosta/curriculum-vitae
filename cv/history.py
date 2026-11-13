@@ -24,7 +24,7 @@ class Match:
 
 
 def _tokens(company: str) -> list[str]:
-    tokens = slugify(company).split("-")
+    tokens = slugify(company, fallback="").split("-")
     while len(tokens) > 1 and tokens[-1] in SUFFIXES:
         tokens.pop()
     return tokens
@@ -32,7 +32,7 @@ def _tokens(company: str) -> list[str]:
 
 def _same_company(a: str, b: str) -> bool:
     ta, tb = _tokens(a), _tokens(b)
-    if "".join(ta) == "".join(tb):
+    if "".join(ta) and "".join(ta) == "".join(tb):
         return True
     return any(len(t) >= MIN_KEY and t in other for t, other in ((ta[0], tb), (tb[0], ta)))
 
