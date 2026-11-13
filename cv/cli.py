@@ -231,14 +231,48 @@ def _shown(amount: Decimal, currency: str) -> str:
     return f"USD {amount:,.0f}" if currency == "USD" else "R$ " + f"{amount:,.0f}".replace(",", ".")
 
 
+def _corrections_path() -> Path:
+    return _private() / "salary" / "ask-corrections.tsv"
+
+
+def _ask_correct(args: argparse.Namespace) -> int:
+    signals = _signals(args)
+    figure = pay.parse_money(args.figure)
+    cfg, params, tables = _ask_setup()
+    proposed = ask.propose(signals, cfg, params, tables, _observations(), datetime.date.today())
+    ask.append_correction(_corrections_path(), args.lead_id, signals, proposed.ask, figure, datetime.date.today())
+    print(f"Recorded {args.lead_id}: proposed {_shown(proposed.ask, proposed.currency)}, "
+          f"corrected to {_shown(figure, proposed.currency)} ({_corrections_path().relative_to(ROOT).as_posix()})")
+    return 0
+
+
+def _ask_calibrate() -> int:
+    path = _corrections_path()
+    rows = []
+    if path.exists():
+        with path.open(encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f, delimiter="\t"))
+    cfg, params, tables = _ask_setup()
+    best, before, after = ask.calibrate(rows, cfg, params, tables)
+    print(f"{len(rows)} corrections")
+    print(f"now:       w_company {cfg.w_company}, w_role {cfg.w_role}, nudge {cfg.nudge} -> MAE {before:,.0f}")
+    print(f"suggested: w_company {best['w_company']}, w_role {best['w_role']}, nudge {best['nudge']} -> MAE {after:,.0f}")
+    print("Nothing was written: copy the suggested values into private/salary/ask.toml if you agree.")
+    return 0
+
+
 def cmd_ask(args: argparse.Namespace) -> int:
     try:
+        if args.ask_cmd == "correct":
+            return _ask_correct(args)
+        if args.ask_cmd == "calibrate":
+            return _ask_calibrate()
         benefits = pay.parse_money(args.benefits)
         signals = _signals(args)
         cfg, params, tables = _ask_setup()
         result = ask.propose(signals, cfg, params, tables, _observations(), datetime.date.today())
-    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError, yaml.YAMLError) as e:
-        print(f"cv ask: {e}", file=sys.stderr)
+    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError, yaml.YAMLError, json.JSONDecodeError) as e:
+        print(f"cv ask: {e!r}" if isinstance(e, KeyError) else f"cv ask: {e}", file=sys.stderr)
         return 1
     if args.json:
         print(json.dumps(_jsonable(dataclasses.asdict(result)), ensure_ascii=False, indent=2))
@@ -254,18 +288,30 @@ def cmd_ask(args: argparse.Namespace) -> int:
     return 0
 
 
-def _add_signal_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--card", help="evaluation card whose front matter holds the signals")
-    p.add_argument("--type", help="company type, a key of [bands] in ask.toml (e.g. br-startup)")
-    p.add_argument("--contract", choices=ask.CONTRACTS)
-    p.add_argument("--size", type=int, help="employees")
-    p.add_argument("--rating", type=Decimal, help="Glassdoor rating, 0-5")
-    p.add_argument("--reach", choices=ASK_REACH)
-    p.add_argument("--maturity", choices=ASK_MATURITY)
-    p.add_argument("--years", type=int, help="years of experience the posting asks for")
-    p.add_argument("--level", choices=ASK_LEVELS)
-    p.add_argument("--org", choices=ASK_ORG)
-    p.add_argument("--demand", action="append", choices=ASK_DEMANDS, help="repeatable")
+def _rating(text: str) -> Decimal:
+    try:
+        value = Decimal(text)
+    except InvalidOperation:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if not value.is_finite() or not 0 <= value <= 5:
+        raise argparse.ArgumentTypeError(f"rating must be between 0 and 5, got {text!r}")
+    return value
+
+
+def _add_signal_args(p: argparse.ArgumentParser, inherit: bool = False) -> None:
+    """Signal flags. With inherit, unset flags keep the parent parser's values instead of resetting them."""
+    kw = {"default": argparse.SUPPRESS} if inherit else {}
+    p.add_argument("--card", help="evaluation card whose front matter holds the signals", **kw)
+    p.add_argument("--type", help="company type, a key of [bands] in ask.toml (e.g. br-startup)", **kw)
+    p.add_argument("--contract", choices=ask.CONTRACTS, **kw)
+    p.add_argument("--size", type=int, help="employees", **kw)
+    p.add_argument("--rating", type=_rating, help="Glassdoor rating, 0-5", **kw)
+    p.add_argument("--reach", choices=ASK_REACH, **kw)
+    p.add_argument("--maturity", choices=ASK_MATURITY, **kw)
+    p.add_argument("--years", type=int, help="years of experience the posting asks for", **kw)
+    p.add_argument("--level", choices=ASK_LEVELS, **kw)
+    p.add_argument("--org", choices=ASK_ORG, **kw)
+    p.add_argument("--demand", action="append", choices=ASK_DEMANDS, help="repeatable", **kw)
 
 
 def cmd_seen(args: argparse.Namespace) -> int:
@@ -345,6 +391,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--benefits", default="0", help="monthly CLT benefits in BRL added to the annualized figure")
     p.add_argument("--json", action="store_true", help="print the result as JSON")
     p.set_defaults(func=cmd_ask)
+    ask_sub = p.add_subparsers(dest="ask_cmd")
+    q = ask_sub.add_parser("correct", help="record the figure you would actually ask for a lead")
+    q.add_argument("lead_id")
+    q.add_argument("figure", help="monthly figure in the contract's currency, e.g. 15000 or 15k")
+    _add_signal_args(q, inherit=True)
+    ask_sub.add_parser("calibrate", help="suggest w_company, w_role and nudge from the corrections (writes nothing)")
 
     p = sub.add_parser("seen", help="check whether a company was applied to recently")
     p.add_argument("company")
