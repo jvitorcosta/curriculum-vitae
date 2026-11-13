@@ -48,6 +48,12 @@ Run with `uv run cv <command>` from the repo root.
 | `cv status <folder> <status> [--date] [--note]` | Record a status change (draft, applied, screening, interview, offer, rejected, withdrawn, ghosted) |
 | `cv build <folder>` | Export resume and cover letter to `out/` as PDF and DOCX |
 | `cv tracker` | Regenerate `private/tracker.md` |
+| `cv pay clt\|pj\|usd <amount> [--benefits N] [--export]` | Convert an offer to monthly net and check it against your floor (`--benefits` for CLT, `--export` for PJ) |
+| `cv pay target <net>` | Gross needed per contract for a monthly net (PJ is solved at the domestic Simples rate) |
+| `cv seen "<Company>" ["<Role>"]` | Check for a recent application to the same company; exit 3 = blocked, 1 = error (including unreadable `meta.yaml`) |
+| `cv funnel [--by channel\|score\|company_type\|archetype\|contract] [--since YYYY-MM-DD]` | Reply rates by bucket, with small-sample warnings and the median days to first screening/interview |
+
+`cv pay` setup: copy `pay.example.toml` to `private/salary/pay.toml` and fill in your own figures. Without it, the example values are used and a warning is printed.
 
 Exports need [pandoc](https://pandoc.org) and [Typst](https://typst.app):
 `winget install --id JohnMacFarlane.Pandoc -e` and `winget install --id Typst.Typst -e`.
