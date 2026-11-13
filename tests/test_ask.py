@@ -63,11 +63,22 @@ def row(amount, contract="clt", currency="BRL", period="month", reliability="pos
 
 def test_acceptance_mid_embedded_br_startup(cfg, params, tables):
     r = propose(acceptance(), cfg, params, tables, [], TODAY)
-    assert D(14500) <= r.ask <= D(15500)
-    assert r.ask % 500 == 0
+    assert r.ask == D(15000)
     assert r.currency == "BRL"
     assert r.band_source == "config"
     assert not r.below_floor
+
+
+def test_nudge_only_pulls_high_positions_down(cfg, params, tables):
+    s = acceptance()
+    no_nudge = propose(s, dataclasses.replace(cfg, nudge=D(0)), params, tables, [], TODAY)
+    full = propose(s, dataclasses.replace(cfg, nudge=D(1)), params, tables, [], TODAY)
+    assert no_nudge.position < D("0.5") and full.position == no_nudge.position
+    top = Signals("br-big", "clt", size=8000, rating=D("4.5"), reach="multinational", maturity="established",
+                  years=5, level="senior", org="engineering")
+    raw = propose(top, dataclasses.replace(cfg, nudge=D(0)), params, tables, [], TODAY).position
+    half = propose(top, dataclasses.replace(cfg, nudge=D("0.5")), params, tables, [], TODAY).position
+    assert half == raw - D("0.5") * (raw - D("0.5"))
 
 
 def test_top_company_senior_lands_near_top(cfg, params, tables):
@@ -151,7 +162,7 @@ def test_cli_ask_flags_prints_steps_and_ask(cli_root, capsys):
     out = capsys.readouterr()
     assert "band:" in out.out and "role score:" in out.out
     last = out.out.strip().splitlines()[-1]
-    assert last.startswith("Ask: R$ 15.500 CLT") and "net" in last
+    assert last.startswith("Ask: R$ 15.000 CLT") and "net" in last
     assert "using ask.example.toml" in out.err
 
 
@@ -181,13 +192,13 @@ def test_cli_ask_card_reads_signals(cli_root, tmp_path, capsys):
     card.write_text("---\ncompany_type: br-startup\ncontract: clt\nsize: 1000\nrating: 3.9\nreach: national\n"
                     "maturity: growth\nyears: null\nlevel: mid\norg: embedded\ndemands: []\n---\n", encoding="utf-8")
     assert cli.main(["ask", "--card", str(card)]) == 0
-    assert capsys.readouterr().out.strip().splitlines()[-1].startswith("Ask: R$ 15.500 CLT")
+    assert capsys.readouterr().out.strip().splitlines()[-1].startswith("Ask: R$ 15.000 CLT")
 
 
 def test_cli_ask_json_round_trips(cli_root, capsys):
     assert cli.main(["ask", *ACCEPTANCE_FLAGS, "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
-    assert data["ask"] == "15500" and D(data["net"]) > 0
+    assert data["ask"] == "15000" and D(data["net"]) > 0
     assert data["steps"] and {"name", "detail"} <= set(data["steps"][0])
 
 
@@ -276,7 +287,7 @@ def test_cli_correct_records_proposed_and_figure(cli_root, capsys):
     assert cli.main(["ask", "correct", "lead-9", "15k", *ACCEPTANCE_FLAGS]) == 0
     lines = (cli_root / "private" / "salary" / "ask-corrections.tsv").read_text(encoding="utf-8").splitlines()
     row = dict(zip(lines[0].split("\t"), lines[1].split("\t")))
-    assert row["lead_id"] == "lead-9" and row["proposed"] == "15500" and row["corrected"] == "15000"
+    assert row["lead_id"] == "lead-9" and row["proposed"] == "15000" and row["corrected"] == "15000"
     assert signals_from_json(row["signals_json"]) == acceptance()
 
 
