@@ -165,25 +165,43 @@ def _card_signals(path: Path) -> ask.Signals:
     if missing:
         raise ValueError(f"{path.name}: front matter is missing {', '.join(missing)}")
 
-    def opt(key, kind):
-        value = fm.get(key)
-        if isinstance(value, str) and value.strip().lower() in UNKNOWN or value is None:
-            return None
-        try:
-            return kind(value)
-        except (ValueError, TypeError, InvalidOperation):
-            raise ValueError(f"{path.name}: {key} must be a {kind.__name__}, got {value!r}") from None
+    def unknown(value) -> bool:
+        return value is None or isinstance(value, str) and value.strip().lower() in UNKNOWN
 
-    demands = fm.get("demands") or []
-    if isinstance(demands, str):
+    def whole(key):
+        value = fm.get(key)
+        if key == "years" and isinstance(value, str) and value.strip().lower() == "none":
+            return 0  # "years: none" means the posting asks for no years, which is a signal, not unknown
+        if unknown(value):
+            return None
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value)
+        raise ValueError(f"{path.name}: {key} must be a whole number, got {value!r}")
+
+    def label(key):
+        value = fm.get(key)
+        return None if unknown(value) else str(value)
+
+    rating = None
+    if not unknown(fm.get("rating")):
+        try:
+            rating = _rating(str(fm["rating"]))
+        except argparse.ArgumentTypeError as e:
+            raise ValueError(f"{path.name}: rating: {e}") from None
+
+    demands = fm.get("demands")
+    if unknown(demands):
+        demands = []
+    elif isinstance(demands, str):
         demands = [d.strip() for d in demands.split(",") if d.strip()]
     if not isinstance(demands, list):
         raise ValueError(f"{path.name}: demands must be a list, got {demands!r}")
     return ask.Signals(
         str(fm["company_type"]), str(fm["contract"]).lower(),
-        size=opt("size", int), rating=opt("rating", lambda v: Decimal(str(v))),
-        reach=opt("reach", str), maturity=opt("maturity", str), years=opt("years", int),
-        level=opt("level", str), org=opt("org", str), demands=frozenset(str(d) for d in demands),
+        size=whole("size"), rating=rating, reach=label("reach"), maturity=label("maturity"),
+        years=whole("years"), level=label("level"), org=label("org"), demands=frozenset(str(d) for d in demands),
     )
 
 
@@ -253,7 +271,7 @@ def _ask_calibrate() -> int:
         with path.open(encoding="utf-8", newline="") as f:
             rows = list(csv.DictReader(f, delimiter="\t"))
     cfg, params, tables = _ask_setup()
-    best, before, after = ask.calibrate(rows, cfg, params, tables)
+    best, before, after = ask.calibrate(rows, cfg, params, tables, _observations())
     print(f"{len(rows)} corrections")
     print(f"now:       w_company {cfg.w_company}, w_role {cfg.w_role}, nudge {cfg.nudge} -> MAE {before:,.0f}")
     print(f"suggested: w_company {best['w_company']}, w_role {best['w_role']}, nudge {best['nudge']} -> MAE {after:,.0f}")
@@ -271,7 +289,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         signals = _signals(args)
         cfg, params, tables = _ask_setup()
         result = ask.propose(signals, cfg, params, tables, _observations(), datetime.date.today())
-    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError, yaml.YAMLError, json.JSONDecodeError) as e:
+    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError, yaml.YAMLError) as e:
         print(f"cv ask: {e!r}" if isinstance(e, KeyError) else f"cv ask: {e}", file=sys.stderr)
         return 1
     if args.json:
@@ -308,7 +326,7 @@ def _add_signal_args(p: argparse.ArgumentParser, inherit: bool = False) -> None:
     p.add_argument("--rating", type=_rating, help="Glassdoor rating, 0-5", **kw)
     p.add_argument("--reach", choices=ASK_REACH, **kw)
     p.add_argument("--maturity", choices=ASK_MATURITY, **kw)
-    p.add_argument("--years", type=int, help="years of experience the posting asks for", **kw)
+    p.add_argument("--years", type=int, help="years of experience the posting asks for (0 = none asked)", **kw)
     p.add_argument("--level", choices=ASK_LEVELS, **kw)
     p.add_argument("--org", choices=ASK_ORG, **kw)
     p.add_argument("--demand", action="append", choices=ASK_DEMANDS, help="repeatable", **kw)

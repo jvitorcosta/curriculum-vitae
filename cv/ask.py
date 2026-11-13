@@ -317,12 +317,28 @@ def signals_json(s: Signals) -> str:
 
 def signals_from_json(text: str) -> Signals:
     data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError(f"signals must be a JSON object, got {text!r}")
     unknown = set(data) - set(Signals.__dataclass_fields__)
     if unknown:
         raise ValueError(f"unknown signal fields: {', '.join(sorted(unknown))}")
+    for key in ("company_type", "contract"):
+        if not isinstance(data.get(key), str):
+            raise ValueError(f"{key} must be text, got {data.get(key)!r}")
+    for key in ("size", "years"):
+        if data.get(key) is not None and (isinstance(data[key], bool) or not isinstance(data[key], int)):
+            raise ValueError(f"{key} must be a whole number, got {data[key]!r}")
+    for key in ("reach", "maturity", "level", "org"):
+        if data.get(key) is not None and not isinstance(data[key], str):
+            raise ValueError(f"{key} must be text, got {data[key]!r}")
     if data.get("rating") is not None:
-        data["rating"] = Decimal(str(data["rating"]))
-    data["demands"] = frozenset(data.get("demands") or ())
+        data["rating"] = _dec(data["rating"], "rating")
+        if not data["rating"].is_finite():
+            raise ValueError(f"rating must be a number, got {data['rating']}")
+    demands = data.get("demands") or []
+    if not isinstance(demands, list) or not all(isinstance(d, str) for d in demands):
+        raise ValueError(f"demands must be a list of labels, got {demands!r}")
+    data["demands"] = frozenset(demands)
     return Signals(**data)
 
 
@@ -339,27 +355,38 @@ def append_correction(path: Path, lead_id: str, signals: Signals, proposed: Deci
         f.write("\t".join((today.isoformat(), lead_id, signals_json(signals), str(proposed), str(corrected))) + "\n")
 
 
-def _mae(pairs: list[tuple[Signals, Decimal]], cfg: AskConfig, params: pay.PayParams, tables: pay.Tables) -> Decimal:
-    today = date.today()  # unused with no observations, but propose needs one
-    errors = [abs(propose(s, cfg, params, tables, [], today).ask - corrected) for s, corrected in pairs]
+def _mae(cases: list[tuple[Signals, Decimal, date]], cfg: AskConfig, params: pay.PayParams, tables: pay.Tables,
+         observations: list[dict]) -> Decimal:
+    errors = [abs(propose(s, cfg, params, tables, observations, when).ask - corrected) for s, corrected, when in cases]
     return sum(errors, Decimal(0)) / len(errors)
 
 
-def calibrate(corrections: list[dict], cfg: AskConfig, params: pay.PayParams,
-              tables: pay.Tables) -> tuple[dict, Decimal, Decimal]:
+def calibrate(corrections: list[dict], cfg: AskConfig, params: pay.PayParams, tables: pay.Tables,
+              observations: list[dict] = ()) -> tuple[dict, Decimal, Decimal]:
     """Grid-search w_company (w_role = 1 - w_company) and nudge for the lowest mean absolute error
-    against the corrected figures. Returns (best values, MAE now, MAE with the best values). Writes nothing."""
-    pairs = [(signals_from_json(r["signals_json"]), pay.parse_money(r["corrected"])) for r in corrections]
-    if len(pairs) < CALIBRATE_MIN:
-        raise ValueError(f"calibrate needs at least {CALIBRATE_MIN} corrections, found {len(pairs)}")
-    before = _mae(pairs, cfg, params, tables)
+    against the corrected figures. Each correction is re-proposed with the market band as of its own date,
+    as `cv ask` saw it then. Returns (best values, MAE now, MAE with the best values). Writes nothing."""
+    if len(corrections) < CALIBRATE_MIN:
+        raise ValueError(f"calibrate needs at least {CALIBRATE_MIN} corrections, found {len(corrections)}")
+    observations = list(observations)
+    cases = []
+    for n, r in enumerate(corrections, start=2):  # row 1 is the header
+        try:
+            signals = signals_from_json(r.get("signals_json") or "")
+            corrected = pay.parse_money(r.get("corrected") or "")
+            when = date.fromisoformat((r.get("date") or "").strip())
+            propose(signals, cfg, params, tables, observations, when)
+        except (ValueError, TypeError, ArithmeticError) as e:
+            raise ValueError(f"ask-corrections.tsv row {n}: {e}") from None
+        cases.append((signals, corrected, when))
+    before = _mae(cases, cfg, params, tables, observations)
     best, best_key = None, None
     for i in range(11):
         w_company = Decimal(i) / 10
         for j in range(11):
             nudge = Decimal(j) * Decimal("0.05")
             trial = replace(cfg, w_company=w_company, w_role=1 - w_company, nudge=nudge)
-            mae = _mae(pairs, trial, params, tables)
+            mae = _mae(cases, trial, params, tables, observations)
             # Ties go to the values closest to the current config.
             key = (mae, abs(w_company - cfg.w_company) + abs(nudge - cfg.nudge))
             if best_key is None or key < best_key:
