@@ -283,3 +283,43 @@ def test_cli_correct_records_proposed_and_figure(cli_root, capsys):
 def test_cli_correct_needs_signals(cli_root, capsys):
     assert cli.main(["ask", "correct", "lead-9", "15000"]) == 1
     assert "--type" in capsys.readouterr().err
+
+
+# Review fixes
+
+def test_calibrate_uses_market_band_as_of_each_correction(cfg, params, tables):
+    # Market rows put br-startup clt at 16.5–17.5k, so with no signals cv ask proposed 17k (the config band gives 17.5k).
+    obs = [row("16000", when="2026-10-01"), row("17000", when="2026-10-01"), row("18000", when="2026-10-01")]
+    corrections = [{"date": "2026-11-01", "lead_id": f"l{i}", "signals_json": signals_json(Signals("br-startup", "clt")),
+                    "proposed": "17000", "corrected": "16500"} for i in range(10)]
+    best, before, after = calibrate(corrections, cfg, params, tables, obs)
+    assert after <= before
+    assert before == 500  # 0.5 in the market band = 17000, not the config band's 17500 (error 1000)
+
+
+def test_card_years_none_means_none_asked(cli_root, tmp_path, capsys):
+    card = tmp_path / "evaluation.md"
+    card.write_text("---\ncompany_type: br-startup\ncontract: clt\nyears: none\ndemands: none\n---\n", encoding="utf-8")
+    assert cli.main(["ask", "--card", str(card), "--json"]) == 0
+    steps = json.loads(capsys.readouterr().out)["steps"]
+    assert any(s["name"] == "years" and s["detail"].startswith("0 ->") for s in steps)
+
+
+@pytest.mark.parametrize("value", ["NaN", "9", "abc"])
+def test_card_bad_rating_is_a_clean_error(cli_root, tmp_path, capsys, value):
+    card = tmp_path / "evaluation.md"
+    card.write_text(f"---\ncompany_type: br-startup\ncontract: clt\nrating: {value}\n---\n", encoding="utf-8")
+    assert cli.main(["ask", "--card", str(card)]) == 1
+    assert "rating" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("line", ["2026-11-01\tl1", "2026-11-01\tl1\t[1]\t1\t1", '2026-11-01\tl1\t{"company_type":"br-startup","contract":"clt","size":"abc"}\t1\t1'])
+def test_calibrate_bad_row_is_a_clean_error(cli_root, capsys, line):
+    salary = cli_root / "private" / "salary"
+    salary.mkdir(parents=True)
+    rows = [line] + ["\t".join(r[k] for k in ("date", "lead_id", "signals_json", "proposed", "corrected"))
+                     for r in _corrections(10)]
+    (salary / "ask-corrections.tsv").write_text("date\tlead_id\tsignals_json\tproposed\tcorrected\n" + "\n".join(rows) + "\n",
+                                                encoding="utf-8")
+    assert cli.main(["ask", "calibrate"]) == 1
+    assert "row 2" in capsys.readouterr().err
