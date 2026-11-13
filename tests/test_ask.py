@@ -195,6 +195,20 @@ def test_cli_ask_card_reads_signals(cli_root, tmp_path, capsys):
     assert capsys.readouterr().out.strip().splitlines()[-1].startswith("Ask: R$ 15.000 CLT")
 
 
+def test_cli_ask_card_contract_flag_overrides_card(cli_root, tmp_path, capsys):
+    card = tmp_path / "evaluation.md"
+    card.write_text("---\ncompany_type: br-startup\ncontract: clt\nlevel: mid\n---\n", encoding="utf-8")
+    assert cli.main(["ask", "--card", str(card), "--contract", "pj"]) == 0
+    assert " PJ " in capsys.readouterr().out.strip().splitlines()[-1]
+
+
+def test_cli_ask_card_without_contract_takes_the_flag(cli_root, tmp_path, capsys):
+    card = tmp_path / "evaluation.md"
+    card.write_text("---\ncompany_type: br-startup\ncontract: unknown\nlevel: mid\n---\n", encoding="utf-8")
+    assert cli.main(["ask", "--card", str(card), "--contract", "pj"]) == 0
+    assert " PJ " in capsys.readouterr().out.strip().splitlines()[-1]
+
+
 def test_cli_ask_json_round_trips(cli_root, capsys):
     assert cli.main(["ask", *ACCEPTANCE_FLAGS, "--json"]) == 0
     data = json.loads(capsys.readouterr().out)

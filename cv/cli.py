@@ -158,9 +158,14 @@ def _front_matter(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _card_signals(path: Path) -> ask.Signals:
-    """Signals from an evaluation card's front matter; company_type and contract are required."""
+def _card_signals(path: Path, *, contract: str | None = None) -> ask.Signals:
+    """Signals from an evaluation card's front matter; company_type and contract are required.
+
+    A contract passed in (from --contract) replaces the card's, so the card may leave it unknown.
+    """
     fm = _front_matter(path)
+    if contract:
+        fm = {**fm, "contract": contract}
     missing = [k for k in ("company_type", "contract") if fm.get(k) in UNKNOWN]
     if missing:
         raise ValueError(f"{path.name}: front matter is missing {', '.join(missing)}")
@@ -214,7 +219,9 @@ def _flag_signals(args: argparse.Namespace) -> ask.Signals:
 
 
 def _signals(args: argparse.Namespace) -> ask.Signals:
-    return _card_signals(Path(args.card)) if args.card else _flag_signals(args)
+    if args.card:
+        return _card_signals(Path(args.card), contract=getattr(args, "contract", None))
+    return _flag_signals(args)
 
 
 def _observations() -> list[dict]:
