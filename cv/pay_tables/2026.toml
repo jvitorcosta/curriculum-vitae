@@ -1,0 +1,39 @@
+# Brazilian payroll tax tables, 2026 (monthly). Verified 2026-11-13 against:
+#   INSS: Portaria Interministerial MPS/MF 13/2026 (9 Jan 2026), as published by the Ministerio da Previdencia Social
+#     https://www.gov.br/previdencia/pt-br/noticias/2026/janeiro/beneficios-com-valor-acima-do-salario-minimo-sao-reajustados-em-3-9
+#     https://www.gov.br/inss/pt-br/assuntos/com-reajuste-de-3-9-teto-do-inss-chega-a-r-8-475-55-em-2026
+#   IRRF table, simplified deduction: Receita Federal
+#     https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2026
+#   IRRF monthly reduction: Lei 15.270/2025, art. 3-A of Lei 9.250/1995; calculation guidance
+#     https://www.gov.br/receitafederal/pt-br/assuntos/noticias/2025/dezembro/receita-federal-orienta-fontes-pagadoras-e-contribuintes-a-calcular-a-reducao-do-imposto-de-renda-a-partir-de-1o-de-janeiro-de-2026
+#     https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2025/lei/l15270.htm
+# Not confirmed from an official page: the 11% flat INSS rate on pro-labore (contribuinte individual, general
+# rule of Lei 8.212/91 art. 21), and that the reduction's income is the gross taxable income (Receita's worked example).
+
+simplified_deduction = 607.20
+prolabore_inss_rate = 0.11
+inss_ceiling = 8475.55
+
+# Employee INSS, progressive: each rate applies only to the slice up to `upto`.
+inss = [
+  { upto = 1621.00, rate = 0.075 },
+  { upto = 2902.84, rate = 0.09 },
+  { upto = 4354.27, rate = 0.12 },
+  { upto = 8475.55, rate = 0.14 },
+]
+
+# IRRF monthly table: tax = base * rate - deduction, for the first row whose `upto` covers the base.
+irrf = [
+  { upto = 2428.80, rate = 0.0, deduction = 0.00 },
+  { upto = 2826.65, rate = 0.075, deduction = 182.16 },
+  { upto = 3751.05, rate = 0.15, deduction = 394.16 },
+  { upto = 4664.68, rate = 0.225, deduction = 675.49 },
+  { upto = 999999999.99, rate = 0.275, deduction = 908.73 },
+]
+
+[irrf_reduction]
+full_limit = 5000.00      # income up to this: reduction up to full_amount (tax becomes zero)
+full_amount = 312.89
+partial_limit = 7350.00   # up to this: reduction = partial_a - partial_b * income
+partial_a = 978.62
+partial_b = 0.133145
