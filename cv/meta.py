@@ -6,6 +6,9 @@ from pathlib import Path
 import yaml
 
 STATUSES = ("draft", "applied", "screening", "interview", "offer", "rejected", "withdrawn", "ghosted")
+COMPANY_TYPES = ("br-big", "br-startup", "br-consultancy", "br-regional", "offshore-usd", "foreign-product")
+ARCHETYPES = ("ai-engineer", "ml-engineer", "mlops", "data-eng-ml", "fde", "data-scientist", "other")
+OPTIONAL_TEXT = ("score", "company_type", "archetype", "contract", "ask")
 REQUIRED = ("company", "role", "date", "status")
 
 
@@ -26,6 +29,11 @@ class AppMeta:
     status: str = "draft"
     history: list[dict] = field(default_factory=list)
     notes: str = ""
+    score: str = ""
+    company_type: str = ""
+    archetype: str = ""
+    contract: str = ""
+    ask: str = ""
 
 
 def load_meta(path: Path) -> AppMeta:
@@ -42,12 +50,13 @@ def load_meta(path: Path) -> AppMeta:
         raise MetaError(path, f"unknown status '{data['status']}'")
     data["history"] = [{**h, "date": str(h.get("date", ""))} for h in (data.get("history") or []) if isinstance(h, dict)]
     known = AppMeta.__dataclass_fields__
-    text_fields = {"company", "role", "date", "channel", "url", "status", "notes"}
+    text_fields = {"company", "role", "date", "channel", "url", "status", "notes", *OPTIONAL_TEXT}
     return AppMeta(**{k: (str(v) if k in text_fields else v) for k, v in data.items() if k in known})
 
 
 def save_meta(path: Path, meta: AppMeta) -> None:
-    path.write_text(yaml.safe_dump(asdict(meta), sort_keys=False, allow_unicode=True), encoding="utf-8")
+    data = {k: v for k, v in asdict(meta).items() if k not in OPTIONAL_TEXT or v}  # keep old files unchanged
+    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
 def set_status(meta: AppMeta, status: str, date: str, note: str = "") -> AppMeta:

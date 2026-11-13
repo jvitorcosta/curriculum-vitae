@@ -10,6 +10,7 @@ import yaml
 
 from cv.build import ToolMissing, build_outputs, pdf_text
 from cv import pay
+from cv.funnel import BY, funnel, median_days_to_yield, render_funnel
 from cv.history import blocks, find_matches
 from cv.meta import MetaError, load_meta, save_meta, set_status
 from cv.profile import load_profile
@@ -147,6 +148,20 @@ def cmd_seen(args: argparse.Namespace) -> int:
     return 3 if blocks(matches, args.role) else 0
 
 
+def cmd_funnel(args: argparse.Namespace) -> int:
+    since = None
+    if args.since:
+        try:
+            since = datetime.date.fromisoformat(args.since)
+        except ValueError:
+            print(f"Invalid --since {args.since!r}: use YYYY-MM-DD", file=sys.stderr)
+            return 1
+    rows, _ = collect(_private())
+    metas = [m for _, m in rows]
+    print(render_funnel(funnel(metas, args.by, since), median_days_to_yield(metas)))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cv")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -190,6 +205,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("company")
     p.add_argument("role", nargs="?", default="")
     p.set_defaults(func=cmd_seen)
+
+    p = sub.add_parser("funnel", help="which channels, score bands and company types yield replies")
+    p.add_argument("--by", choices=BY, default="channel")
+    p.add_argument("--since", help="only applications dated on or after YYYY-MM-DD")
+    p.set_defaults(func=cmd_funnel)
 
     args = parser.parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
