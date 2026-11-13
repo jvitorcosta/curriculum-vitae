@@ -52,8 +52,12 @@ Run with `uv run cv <command>` from the repo root.
 | `cv pay target <net>` | Gross needed per contract for a monthly net (PJ is solved at the domestic Simples rate) |
 | `cv seen "<Company>" ["<Role>"]` | Check for a recent application to the same company; exit 3 = blocked, 1 = error (including unreadable `meta.yaml`) |
 | `cv funnel [--by channel\|score\|company_type\|archetype\|contract] [--since YYYY-MM-DD]` | Reply rates by bucket, with small-sample warnings and the median days to first screening/interview |
+| `cv ask --type T --contract clt\|pj\|contractor [signals] [--benefits N] [--json]` | An explained salary ask: the band for the company type, a company and a role score, the position in the band, the floor check and the monthly net. Signals: `--size`, `--rating`, `--reach`, `--maturity`, `--years`, `--level`, `--org`, `--demand` (repeatable); leave out what you don't know |
+| `cv ask --card <evaluation.md> [--json]` | The same, reading `company_type`, `contract` and the optional signals from the card's front matter |
 
 `cv pay` setup: copy `pay.example.toml` to `private/salary/pay.toml` and fill in your own figures. Without it, the example values are used and a warning is printed.
+
+`cv ask` setup: copy `ask.example.toml` to `private/salary/ask.toml` and tune the bands, signal maps and weights. With at least 3 market rows for the same company type and contract in `private/salary/observations.tsv` (last 365 days, not your own asks), their 25th–75th percentile replaces the config band.
 
 Exports need [pandoc](https://pandoc.org) and [Typst](https://typst.app):
 `winget install --id JohnMacFarlane.Pandoc -e` and `winget install --id Typst.Typst -e`.
