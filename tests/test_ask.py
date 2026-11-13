@@ -8,7 +8,16 @@ from pathlib import Path
 import pytest
 
 from cv import cli
-from cv.ask import Signals, load_ask_config, market_band, propose
+from cv.ask import (
+    Signals,
+    append_correction,
+    calibrate,
+    load_ask_config,
+    market_band,
+    propose,
+    signals_from_json,
+    signals_json,
+)
 from cv.pay import load_params, load_tables
 
 D = Decimal
@@ -196,3 +205,81 @@ def test_cli_ask_uses_private_observations(cli_root, capsys):
 def test_cli_ask_unknown_type_errors(cli_root, capsys):
     assert cli.main(["ask", "--type", "nope", "--contract", "clt"]) == 1
     assert "no band" in capsys.readouterr().err
+
+
+# Corrections and calibration
+
+def test_correct_appends_row(tmp_path):
+    path = tmp_path / "salary" / "ask-corrections.tsv"
+    s = Signals("br-startup", "clt", rating=D("3.9"), level="mid", demands=frozenset({"travel"}))
+    append_correction(path, "lead-1", s, D(15500), D(15000), TODAY)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0].split("\t") == ["date", "lead_id", "signals_json", "proposed", "corrected"]
+    assert len(lines) == 2
+    date_, lead, sj, proposed, corrected = lines[1].split("\t")
+    assert (date_, lead, proposed, corrected) == ("2026-11-13", "lead-1", "15500", "15000")
+    assert signals_from_json(sj) == s
+    append_correction(path, "lead-2", s, D(15500), D(15000), TODAY)
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_correct_rejects_tab_in_lead_id(tmp_path):
+    with pytest.raises(ValueError):
+        append_correction(tmp_path / "c.tsv", "a\tb", Signals("br-startup", "clt"), D(1), D(1), TODAY)
+
+
+def _corrections(n):
+    senior = Signals("br-startup", "clt", size=8000, rating=D("4.5"), reach="multinational", years=5, level="senior")
+    return [{"date": "2026-11-01", "lead_id": f"lead-{i}", "signals_json": signals_json(senior),
+             "proposed": "19000", "corrected": "15000"} for i in range(n)]
+
+
+def test_calibrate_reduces_error(cfg, params, tables):
+    best, before, after = calibrate(_corrections(10), cfg, params, tables)
+    assert set(best) == {"w_company", "w_role", "nudge"}
+    assert best["w_company"] + best["w_role"] == 1
+    assert after < before
+
+
+def _write_corrections(root, rows):
+    salary = root / "private" / "salary"
+    salary.mkdir(parents=True, exist_ok=True)
+    header = "date\tlead_id\tsignals_json\tproposed\tcorrected\n"
+    body = "".join("\t".join(r[k] for k in ("date", "lead_id", "signals_json", "proposed", "corrected")) + "\n"
+                   for r in rows)
+    (salary / "ask-corrections.tsv").write_text(header + body, encoding="utf-8")
+
+
+def test_calibrate_needs_ten(cli_root, capsys):
+    _write_corrections(cli_root, _corrections(9))
+    assert cli.main(["ask", "calibrate"]) == 1
+    assert "10" in capsys.readouterr().err
+
+
+def test_calibrate_without_file_needs_ten(cli_root, capsys):
+    assert cli.main(["ask", "calibrate"]) == 1
+    assert "10" in capsys.readouterr().err
+
+
+def test_cli_calibrate_prints_and_never_writes_config(cli_root, capsys):
+    private_cfg = cli_root / "private" / "salary" / "ask.toml"
+    _write_corrections(cli_root, _corrections(10))
+    shutil.copy(cli_root / "ask.example.toml", private_cfg)
+    before = private_cfg.read_bytes()
+    assert cli.main(["ask", "calibrate"]) == 0
+    out = capsys.readouterr().out
+    assert "w_company" in out and "nudge" in out and "MAE" in out
+    assert private_cfg.read_bytes() == before
+
+
+def test_cli_correct_records_proposed_and_figure(cli_root, capsys):
+    assert cli.main(["ask", "correct", "lead-9", "15k", *ACCEPTANCE_FLAGS]) == 0
+    lines = (cli_root / "private" / "salary" / "ask-corrections.tsv").read_text(encoding="utf-8").splitlines()
+    row = dict(zip(lines[0].split("\t"), lines[1].split("\t")))
+    assert row["lead_id"] == "lead-9" and row["proposed"] == "15500" and row["corrected"] == "15000"
+    assert signals_from_json(row["signals_json"]) == acceptance()
+
+
+def test_cli_correct_needs_signals(cli_root, capsys):
+    assert cli.main(["ask", "correct", "lead-9", "15000"]) == 1
+    assert "--type" in capsys.readouterr().err

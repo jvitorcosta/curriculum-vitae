@@ -1,7 +1,8 @@
 """Propose an explained salary ask from company and role signals (anchor a band, then rank within it)."""
 
+import json
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -301,3 +302,66 @@ def propose(s: Signals, cfg: AskConfig, params: pay.PayParams, tables: pay.Table
 
     net = _net(s.contract, ask, params, tables)
     return AskResult(ask, currency, s.contract, net, below_floor, band, source, company, role, position, steps)
+
+
+CORRECTION_COLUMNS = ("date", "lead_id", "signals_json", "proposed", "corrected")
+CALIBRATE_MIN = 10
+
+
+def signals_json(s: Signals) -> str:
+    data = {k: getattr(s, k) for k in Signals.__dataclass_fields__}
+    data["rating"] = None if s.rating is None else str(s.rating)
+    data["demands"] = sorted(s.demands)
+    return json.dumps(data, ensure_ascii=False, sort_keys=True)
+
+
+def signals_from_json(text: str) -> Signals:
+    data = json.loads(text)
+    unknown = set(data) - set(Signals.__dataclass_fields__)
+    if unknown:
+        raise ValueError(f"unknown signal fields: {', '.join(sorted(unknown))}")
+    if data.get("rating") is not None:
+        data["rating"] = Decimal(str(data["rating"]))
+    data["demands"] = frozenset(data.get("demands") or ())
+    return Signals(**data)
+
+
+def append_correction(path: Path, lead_id: str, signals: Signals, proposed: Decimal, corrected: Decimal,
+                      today: date) -> None:
+    """Append one correction row to the TSV, writing the header first when the file is new."""
+    if not lead_id or any(c in lead_id for c in "\t\r\n"):
+        raise ValueError(f"lead id must be non-empty with no tabs or line breaks: {lead_id!r}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = not path.exists() or path.stat().st_size == 0
+    with path.open("a", encoding="utf-8", newline="") as f:
+        if new:
+            f.write("\t".join(CORRECTION_COLUMNS) + "\n")
+        f.write("\t".join((today.isoformat(), lead_id, signals_json(signals), str(proposed), str(corrected))) + "\n")
+
+
+def _mae(pairs: list[tuple[Signals, Decimal]], cfg: AskConfig, params: pay.PayParams, tables: pay.Tables) -> Decimal:
+    today = date.today()  # unused with no observations, but propose needs one
+    errors = [abs(propose(s, cfg, params, tables, [], today).ask - corrected) for s, corrected in pairs]
+    return sum(errors, Decimal(0)) / len(errors)
+
+
+def calibrate(corrections: list[dict], cfg: AskConfig, params: pay.PayParams,
+              tables: pay.Tables) -> tuple[dict, Decimal, Decimal]:
+    """Grid-search w_company (w_role = 1 - w_company) and nudge for the lowest mean absolute error
+    against the corrected figures. Returns (best values, MAE now, MAE with the best values). Writes nothing."""
+    pairs = [(signals_from_json(r["signals_json"]), pay.parse_money(r["corrected"])) for r in corrections]
+    if len(pairs) < CALIBRATE_MIN:
+        raise ValueError(f"calibrate needs at least {CALIBRATE_MIN} corrections, found {len(pairs)}")
+    before = _mae(pairs, cfg, params, tables)
+    best, best_key = None, None
+    for i in range(11):
+        w_company = Decimal(i) / 10
+        for j in range(11):
+            nudge = Decimal(j) * Decimal("0.05")
+            trial = replace(cfg, w_company=w_company, w_role=1 - w_company, nudge=nudge)
+            mae = _mae(pairs, trial, params, tables)
+            # Ties go to the values closest to the current config.
+            key = (mae, abs(w_company - cfg.w_company) + abs(nudge - cfg.nudge))
+            if best_key is None or key < best_key:
+                best, best_key = {"w_company": w_company, "w_role": 1 - w_company, "nudge": nudge}, key
+    return best, before, best_key[0]
