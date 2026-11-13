@@ -53,7 +53,7 @@ Run with `uv run cv <command>` from the repo root.
 | `cv seen "<Company>" ["<Role>"]` | Check for a recent application to the same company; exit 3 = blocked, 1 = error (including unreadable `meta.yaml`) |
 | `cv funnel [--by channel\|score\|company_type\|archetype\|contract] [--since YYYY-MM-DD]` | Reply rates by bucket, with small-sample warnings and the median days to first screening/interview |
 | `cv ask --type T --contract clt\|pj\|contractor [signals] [--benefits N] [--json]` | An explained salary ask: the band for the company type, a company and a role score, the position in the band, the floor check and the monthly net. Signals: `--size`, `--rating`, `--reach`, `--maturity`, `--years`, `--level`, `--org`, `--demand` (repeatable); leave out what you don't know (`--years 0` means no years asked) |
-| `cv ask --card <evaluation.md> [--json]` | The same, reading `company_type`, `contract` and the optional signals from the card's front matter |
+| `cv ask --card <evaluation.md> [--contract C] [--json]` | The same, reading `company_type`, `contract` and the optional signals from the card's front matter; `--contract` replaces the card's contract (for a posting that leaves it open) |
 | `cv ask correct <lead_id> <figure> (--card <path> \| signal flags)` | Record the figure you would really ask, next to what `cv ask` proposed, in `private/salary/ask-corrections.tsv` |
 | `cv ask calibrate` | With 10 or more corrections, suggest `w_company`, `w_role` and `nudge` that lower the mean absolute error, and print the error before and after. It never edits the config |
 
