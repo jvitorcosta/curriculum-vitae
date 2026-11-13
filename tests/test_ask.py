@@ -123,3 +123,76 @@ def test_usd_rounds_to_100(cfg, params, tables):
 def test_unknown_band_errors(cfg, params, tables):
     with pytest.raises(ValueError, match="no band"):
         propose(Signals("br-big", "contractor"), cfg, params, tables, [], TODAY)
+
+
+# CLI
+
+ACCEPTANCE_FLAGS = ["--type", "br-startup", "--contract", "clt", "--size", "1000", "--rating", "3.9",
+                    "--reach", "national", "--maturity", "growth", "--level", "mid", "--org", "embedded"]
+
+
+@pytest.fixture
+def cli_root(example_root, monkeypatch):
+    monkeypatch.setattr(cli, "ROOT", example_root)
+    return example_root
+
+
+def test_cli_ask_flags_prints_steps_and_ask(cli_root, capsys):
+    assert cli.main(["ask", *ACCEPTANCE_FLAGS]) == 0
+    out = capsys.readouterr()
+    assert "band:" in out.out and "role score:" in out.out
+    last = out.out.strip().splitlines()[-1]
+    assert last.startswith("Ask: R$ 15.500 CLT") and "net" in last
+    assert "using ask.example.toml" in out.err
+
+
+def test_cli_ask_all_unknown_exits_zero(cli_root, capsys):
+    assert cli.main(["ask", "--type", "br-startup", "--contract", "pj"]) == 0
+    assert "no signals" in capsys.readouterr().out
+
+
+def test_cli_ask_card_missing_type_errors(cli_root, tmp_path, capsys):
+    card = tmp_path / "evaluation.md"
+    card.write_text("---\ncontract: clt\nlevel: mid\n---\n\n# Card\n", encoding="utf-8")
+    assert cli.main(["ask", "--card", str(card)]) == 1
+    err = capsys.readouterr().err
+    assert "company_type" in err and "contract" not in err.split("missing", 1)[-1]
+
+
+def test_cli_ask_card_without_front_matter_names_both(cli_root, tmp_path, capsys):
+    card = tmp_path / "evaluation.md"
+    card.write_text("# Card\n\nno front matter\n", encoding="utf-8")
+    assert cli.main(["ask", "--card", str(card)]) == 1
+    err = capsys.readouterr().err
+    assert "company_type" in err and "contract" in err
+
+
+def test_cli_ask_card_reads_signals(cli_root, tmp_path, capsys):
+    card = tmp_path / "evaluation.md"
+    card.write_text("---\ncompany_type: br-startup\ncontract: clt\nsize: 1000\nrating: 3.9\nreach: national\n"
+                    "maturity: growth\nyears: null\nlevel: mid\norg: embedded\ndemands: []\n---\n", encoding="utf-8")
+    assert cli.main(["ask", "--card", str(card)]) == 0
+    assert capsys.readouterr().out.strip().splitlines()[-1].startswith("Ask: R$ 15.500 CLT")
+
+
+def test_cli_ask_json_round_trips(cli_root, capsys):
+    assert cli.main(["ask", *ACCEPTANCE_FLAGS, "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["ask"] == "15500" and D(data["net"]) > 0
+    assert data["steps"] and {"name", "detail"} <= set(data["steps"][0])
+
+
+def test_cli_ask_uses_private_observations(cli_root, capsys):
+    salary = cli_root / "private" / "salary"
+    salary.mkdir(parents=True)
+    header = "date\tcompany\tcompany_type\tsize\trole\tseniority\tcontract\tamount\tcurrency\tperiod\tsource\treliability\tnote\n"
+    rows = "".join(f"{date.today().isoformat()}\tExample Co\tbr-startup\t\tEngineer\tsenior\tclt\t{a}\tBRL\tmonth\tsite\tposted\t\n"
+                   for a in ("16000", "17000", "18000"))
+    (salary / "observations.tsv").write_text(header + rows, encoding="utf-8")
+    assert cli.main(["ask", *ACCEPTANCE_FLAGS]) == 0
+    assert "market 25th" in capsys.readouterr().out
+
+
+def test_cli_ask_unknown_type_errors(cli_root, capsys):
+    assert cli.main(["ask", "--type", "nope", "--contract", "clt"]) == 1
+    assert "no band" in capsys.readouterr().err

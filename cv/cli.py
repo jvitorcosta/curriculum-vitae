@@ -1,16 +1,20 @@
 """Command line: uv run cv <command>."""
 
 import argparse
+import csv
+import dataclasses
 import datetime
+import json
 import subprocess
 import sys
 import tomllib
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import yaml
 
-from cv import pay
-from cv.build import ToolMissing, build_outputs, pdf_text
+from cv import ask, pay
+from cv.build import ToolMissing, build_outputs, pdf_text, split_front_matter
 from cv.funnel import BY, funnel, median_days_to_yield, render_funnel
 from cv.history import blocks, find_matches
 from cv.meta import MetaError, load_meta, save_meta, set_status
@@ -141,6 +145,129 @@ def cmd_pay(args: argparse.Namespace) -> int:
     return 0
 
 
+ASK_LEVELS = ("junior", "mid", "senior", "staff", "lead")
+ASK_REACH = ("local", "national", "multinational", "usd-payer")
+ASK_MATURITY = ("early", "growth", "established")
+ASK_ORG = ("engineering", "embedded")
+ASK_DEMANDS = ("on-call", "client-facing", "leads-people", "travel")
+UNKNOWN = (None, "", "unknown", "none", "null")
+
+
+def _front_matter(path: Path) -> dict:
+    data, _ = split_front_matter(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {}
+
+
+def _card_signals(path: Path) -> ask.Signals:
+    """Signals from an evaluation card's front matter; company_type and contract are required."""
+    fm = _front_matter(path)
+    missing = [k for k in ("company_type", "contract") if fm.get(k) in UNKNOWN]
+    if missing:
+        raise ValueError(f"{path.name}: front matter is missing {', '.join(missing)}")
+
+    def opt(key, kind):
+        value = fm.get(key)
+        if isinstance(value, str) and value.strip().lower() in UNKNOWN or value is None:
+            return None
+        try:
+            return kind(value)
+        except (ValueError, TypeError, InvalidOperation):
+            raise ValueError(f"{path.name}: {key} must be a {kind.__name__}, got {value!r}") from None
+
+    demands = fm.get("demands") or []
+    if isinstance(demands, str):
+        demands = [d.strip() for d in demands.split(",") if d.strip()]
+    if not isinstance(demands, list):
+        raise ValueError(f"{path.name}: demands must be a list, got {demands!r}")
+    return ask.Signals(
+        str(fm["company_type"]), str(fm["contract"]).lower(),
+        size=opt("size", int), rating=opt("rating", lambda v: Decimal(str(v))),
+        reach=opt("reach", str), maturity=opt("maturity", str), years=opt("years", int),
+        level=opt("level", str), org=opt("org", str), demands=frozenset(str(d) for d in demands),
+    )
+
+
+def _flag_signals(args: argparse.Namespace) -> ask.Signals:
+    if not args.type or not args.contract:
+        raise ValueError("give --card <evaluation.md>, or --type and --contract")
+    return ask.Signals(args.type, args.contract, size=args.size, rating=args.rating, reach=args.reach,
+                       maturity=args.maturity, years=args.years, level=args.level, org=args.org,
+                       demands=frozenset(args.demand or ()))
+
+
+def _signals(args: argparse.Namespace) -> ask.Signals:
+    return _card_signals(Path(args.card)) if args.card else _flag_signals(args)
+
+
+def _observations() -> list[dict]:
+    path = _private() / "salary" / "observations.tsv"
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as f:
+        return list(csv.DictReader(f, delimiter="\t"))
+
+
+def _ask_setup():
+    cfg, fell_back = ask.load_ask_config(ROOT)
+    params, pay_fell_back = pay.load_params(ROOT)
+    if fell_back:
+        print("using ask.example.toml (no private/salary/ask.toml)", file=sys.stderr)
+    if pay_fell_back:
+        print("using pay.example.toml (no private/salary/pay.toml)", file=sys.stderr)
+    return cfg, params, pay.load_tables(pay.latest_year())
+
+
+def _jsonable(value):
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    return value
+
+
+def _shown(amount: Decimal, currency: str) -> str:
+    return f"USD {amount:,.0f}" if currency == "USD" else "R$ " + f"{amount:,.0f}".replace(",", ".")
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    try:
+        benefits = pay.parse_money(args.benefits)
+        signals = _signals(args)
+        cfg, params, tables = _ask_setup()
+        result = ask.propose(signals, cfg, params, tables, _observations(), datetime.date.today())
+    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError, yaml.YAMLError) as e:
+        print(f"cv ask: {e}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(_jsonable(dataclasses.asdict(result)), ensure_ascii=False, indent=2))
+        return 0
+    for step in result.steps:
+        print(f"{step.name}: {step.detail}")
+    line = f"Ask: {_shown(result.ask, result.currency)} {result.contract.upper()} ≈ {_brl(result.net)} net"
+    if result.contract == "clt":
+        line += f" ({_brl(pay.clt_annualized(result.ask, tables, benefits))} annualized)"
+    if result.below_floor:
+        line += " · BELOW FLOOR"
+    print(line)
+    return 0
+
+
+def _add_signal_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--card", help="evaluation card whose front matter holds the signals")
+    p.add_argument("--type", help="company type, a key of [bands] in ask.toml (e.g. br-startup)")
+    p.add_argument("--contract", choices=ask.CONTRACTS)
+    p.add_argument("--size", type=int, help="employees")
+    p.add_argument("--rating", type=Decimal, help="Glassdoor rating, 0-5")
+    p.add_argument("--reach", choices=ASK_REACH)
+    p.add_argument("--maturity", choices=ASK_MATURITY)
+    p.add_argument("--years", type=int, help="years of experience the posting asks for")
+    p.add_argument("--level", choices=ASK_LEVELS)
+    p.add_argument("--org", choices=ASK_ORG)
+    p.add_argument("--demand", action="append", choices=ASK_DEMANDS, help="repeatable")
+
+
 def cmd_seen(args: argparse.Namespace) -> int:
     rows, errors = collect(_private())
     for e in errors:
@@ -212,6 +339,12 @@ def main(argv: list[str] | None = None) -> int:
     q = pay_sub.add_parser("target", help="gross needed per contract for a monthly net")
     q.add_argument("amount")
     p.set_defaults(func=cmd_pay)
+
+    p = sub.add_parser("ask", help="an explained salary ask from company and role signals")
+    _add_signal_args(p)
+    p.add_argument("--benefits", default="0", help="monthly CLT benefits in BRL added to the annualized figure")
+    p.add_argument("--json", action="store_true", help="print the result as JSON")
+    p.set_defaults(func=cmd_ask)
 
     p = sub.add_parser("seen", help="check whether a company was applied to recently")
     p.add_argument("company")
