@@ -16,7 +16,7 @@ Format: see nubank.md.
 Facts: EDA, sanity checks, seasonality and residual analysis over 24 city-level series (citygates: metering and pressure regulation stations); ADF, KPSS, Granger-causality and Ljung-Box tests; co-implemented a mixed ensemble (LightGBM, SARIMAX, Holt-Winters, intra-daily volume proportion); optimized demand programming with Petrobras; ~R$200M in contractual fines avoided in the first three months; 18 of 24 citygates within the 5% fine threshold.
 
 Variants:
-- Helped cut natural-gas contractual fines by roughly R$200M in the first three months by performing EDA, sanity checks and time-series modeling over 24 city-level series for Comgás, enabling an ensemble forecast that kept 18 of 24 citygates within the 5% fine threshold.
+- Ran the EDA, sanity checks and time-series modeling over 24 city-level series for Comgás behind an ensemble forecast that kept 18 of 24 citygates within the 5% fine threshold and cut natural-gas contractual fines by roughly R$200M in the first three months.
 - Co-implemented a LightGBM/SARIMAX/Holt-Winters ensemble over 24 city-level gas demand series, validated with ADF, KPSS, Granger and Ljung-Box tests, optimizing demand programming with Petrobras and avoiding ~R$200M in fines in three months.
 
 ## Azure ML forecasting pipelines (MLOps)  [ml] [data-eng] [platform]

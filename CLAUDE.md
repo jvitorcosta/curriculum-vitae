@@ -23,6 +23,22 @@ This repo is public. Everything personal lives in `private/`, a separate private
 
 Plain and human, not "AI style": avoid colon- and dash-heavy constructions, polished punchlines and triplets. Use plain words over jargon. A casual aside is fine. Short paragraphs.
 
+## Say "I" for your own work
+
+Interviewers and recruiters have told Vitor more than once to say "I built" instead of "we built" or "my team did". This applies everywhere: resume bullets, `main/` variants, cover letters, interview answers and stories, and recruiter or LinkedIn replies.
+
+- **Own work gets "I"** (or, in resume bullets, an action verb with "I" implied: "Built", "Designed", "Ran"). Lead with what he did, then the result it fed.
+- **Team work stays "we" or "the team"**, and his part in it is said separately: "The team rebuilt the forecast; I ran the EDA and statistical tests and co-implemented the ensemble." Don't flip a team result into "I" to sound stronger.
+- **Only where the record says so.** "I" needs `main/` (or a private note marked `[vitor]`) recording the work as his. If his own part is unknown or marked "to confirm", keep "we" or neutral wording and list the item for Vitor to confirm. Never add scope, metrics or ownership to make a sentence first person.
+- **Weak verbs.** Avoid "helped", "assisted", "participated in", "was responsible for" when a precise verb for his own action exists. Keep them (or "co-") when they are the honest description of a shared piece of work.
+- "Our users", "our business unit" and "the team's templates" are fine: they describe context, not who did the work.
+
+Why, with sources:
+- In a behavioral answer, the Action step should "move from 'We' to 'I' to show how you individually contributed to the group" ([University of Oregon College of Design, Employment Interviews](https://design.uoregon.edu/student-services/career-advising/interviewing)). Big-tech interview guides list a steady "we" as a common mistake, because the interviewer can't tell what the candidate did (a big-tech source is cited in `private/answers/interview-framework.md`).
+- Purdue's career services recommend the bullet formula power verb + task + purpose/method/result, and avoiding "assisted with", "helped with" and "responsible for" as weak representations of accomplishments ([Purdue Business Career Services, Power Verbs](https://business.purdue.edu/careers/resources/power-verbs-and-skills.php)).
+- Resume bullets skip pronouns (I, me, my, we, our, us) and start with the action verb, so the first person is implied ([University of Phoenix, Bullet Statements Guide](https://www.phoenix.edu/content/dam/edu/blog/doc/career-resources/resumes/career-services-bullet-statements-guide.pdf)).
+- In STAR answers the Action step is where the interviewer grades the candidate, so it should describe what he did, not what the group did.
+
 ## Never store
 
 Anything personal (phone, legal name, applications and their outcomes, salary, answers, internal notes) stays in `private/`, never in this repo. And never anywhere, not even in `private/`: CPF, RG, passport or other government ID numbers, bank details, passwords, photos of documents. When a form asks for these, Vitor fills them in himself and the folder notes "provided".
