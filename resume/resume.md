@@ -62,7 +62,7 @@ São Paulo, BR (hybrid) · Sep 2022 – Jul 2026 · promoted from Intern to Engi
 
 São Paulo, BR (remote) · Jun 2021 – Sep 2022
 
-- Helped cut natural-gas contractual fines by roughly R$200M in the first three months for Comgás, Brazil's largest natural-gas distributor. Co-implemented a LightGBM/SARIMAX/Holt-Winters ensemble over 24 city-level demand series, validated with ADF, KPSS, Granger and Ljung-Box tests, that kept 18 of 24 citygates within the 5% fine threshold in demand programming with Petrobras.
+- Co-implemented a LightGBM/SARIMAX/Holt-Winters ensemble over 24 city-level demand series for Comgás, Brazil's largest natural-gas distributor, after running the EDA and ADF, KPSS, Granger and Ljung-Box tests. The forecast kept 18 of 24 citygates within the 5% fine threshold in demand programming with Petrobras and cut contractual fines by roughly R$200M in the first three months.
 - Co-designed end-to-end ML pipelines in Azure ML with MLflow tracking, migrating a Databricks-only solution to a managed setup orchestrated by Azure Data Factory, from Azure Data Lake to Synapse views and Power BI dashboards, with automated data quality checks in a medallion architecture.
 - Built a Streamlit app that automated a Box-Jenkins-style forecasting workflow, from visualization to model evaluation, for business stakeholders.
 - Standardized text processing across consulting projects by co-implementing an internal NLP framework in Streamlit with spaCy and NLTK.
