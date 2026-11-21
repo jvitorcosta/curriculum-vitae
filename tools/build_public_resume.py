@@ -13,7 +13,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from cv.build import _run, check_tools, compose_document, pdf_text
+from cv.build import _run, ats_report, check_tools, compose_document, pdf_text, resume_headings
 from cv.profile import public_profile, require_private_profile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +43,10 @@ def main() -> None:
               "-o", str(out / f"{STEM}.docx")])
     pdf = out / f"{STEM}.pdf"
     pages = len(PdfReader(pdf).pages)
-    assert "phone" not in profile and profile["name"] in pdf_text(pdf)
+    assert "phone" not in profile
+    problems = ats_report(pdf_text(pdf), profile, resume_headings(SOURCE.read_text(encoding="utf-8")))
+    if problems:
+        raise SystemExit("ATS text check failed: " + "; ".join(problems))
     print(f"Built {pdf.name} ({pages} page{'s' if pages != 1 else ''}) and {STEM}.docx")
     if pages > 2:
         raise SystemExit("Resume is longer than 2 pages: cut older or weaker bullets.")
