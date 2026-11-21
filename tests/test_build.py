@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cv.build import build_outputs, compose_document, pdf_text
+from cv.build import ats_report, build_outputs, compose_document, keyword_report, pdf_text, resume_headings
 from cv.scaffold import new_application
 
 needs_tools = pytest.mark.skipif(not shutil.which("pandoc") or not shutil.which("typst"),
@@ -50,3 +50,67 @@ def test_public_resume_labels_the_overlapping_qubika_role_as_a_contract():
     # It overlapped Nubank, so the label says why up front: a part-time contract.
     text = (Path(__file__).parents[1] / "resume" / "resume.md").read_text(encoding="utf-8")
     assert "Remote, part-time contract · Feb 2026 – Jul 2026" in text
+
+
+GOOD_TEXT = ("Vitor Pinheiro\nManaus, AM, Brazil | +00 00 00000-0000 | vitor@example.com\n"
+             "SUMMARY\nBuilds things.\nSKILLS\nPython\nEXPERIENCE\nAcme\nEDUCATION\nBSc\n")
+HEADINGS = ["SUMMARY", "SKILLS", "EXPERIENCE", "EDUCATION"]
+
+
+def test_ats_report_passes_good_text():
+    assert ats_report(GOOD_TEXT, PROFILE, HEADINGS) == []
+
+
+def test_ats_report_flags_missing_phone():
+    text = GOOD_TEXT.replace("+00 00 00000-0000", "")
+    assert any("phone" in p for p in ats_report(text, PROFILE, HEADINGS))
+
+
+def test_ats_report_skips_phone_when_profile_has_none():
+    profile = {**PROFILE, "phone": ""}
+    assert ats_report(GOOD_TEXT.replace("+00 00 00000-0000", ""), profile, HEADINGS) == []
+
+
+def test_ats_report_flags_missing_heading():
+    text = GOOD_TEXT.replace("SKILLS\n", "")
+    problems = ats_report(text, PROFILE, HEADINGS)
+    assert any("SKILLS" in p for p in problems)
+
+
+def test_ats_report_flags_headings_out_of_order():
+    text = GOOD_TEXT.replace("SKILLS\nPython\nEXPERIENCE\nAcme\n", "EXPERIENCE\nAcme\nSKILLS\nPython\n")
+    assert any("order" in p for p in ats_report(text, PROFILE, HEADINGS))
+
+
+@pytest.mark.parametrize("bad", ["(cid:123)", "�"])
+def test_ats_report_flags_broken_glyphs(bad):
+    problems = ats_report(GOOD_TEXT + f"Skill {bad}\n", PROFILE, HEADINGS)
+    assert any("glyph" in p for p in problems)
+
+
+def test_ats_report_flags_missing_name_and_email():
+    problems = ats_report("SUMMARY\n", PROFILE, ["SUMMARY"])
+    assert any("name" in p for p in problems) and any("email" in p for p in problems)
+
+
+def test_resume_headings_follow_source_and_language():
+    md = "---\nlang: pt\n---\n## SUMMARY\nx\n### Acme\n## EXPERIENCE\ny\n"
+    assert resume_headings(md) == ["RESUMO", "EXPERIÊNCIA"]
+    assert resume_headings("## SKILLS\n- a\n") == ["SKILLS"]
+
+
+def test_keyword_report_splits_found_and_absent():
+    posting = "We need Python and Kubernetes. Python, Kubernetes, Airflow. Airflow pipelines and Python."
+    found, absent = keyword_report(posting, "I wrote Python and Airflow jobs.")
+    assert "python" in found and "airflow" in found
+    assert "kubernetes" in absent
+    assert "and" not in found + absent
+
+
+@needs_tools
+def test_built_pdf_passes_ats_report(tmp_path):
+    d = new_application(tmp_path, "Acme Labs", "AI Engineer", "2026-10-19")
+    md = "---\nheadline: AI Engineer\nlang: en\n---\n## SUMMARY\nBuilds.\n\n## SKILLS\n- Python\n\n## EXPERIENCE\n- Built things\n"
+    (d / "resume.md").write_text(md, encoding="utf-8")
+    pdf = next(p for p in build_outputs(d, PROFILE, TEMPLATES) if p.suffix == ".pdf")
+    assert ats_report(pdf_text(pdf), PROFILE, resume_headings(md)) == []

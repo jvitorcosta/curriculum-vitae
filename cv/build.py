@@ -95,3 +95,59 @@ def build_outputs(app_dir: Path, profile: dict, templates: Path) -> list[Path]:
 
 def pdf_text(path: Path) -> str:
     return "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
+
+
+def resume_headings(resume_md: str) -> list[str]:
+    """The `## ` section headings of a resume source, as they appear in its PDF (translated for lang: pt)."""
+    front, body = split_front_matter(resume_md)
+    names = re.findall(r"^## (.+?)\s*$", body, flags=re.M)
+    if front.get("lang") == "pt":
+        names = [PT_HEADINGS.get(n, n) for n in names]
+    return names
+
+
+def _digits(s: str) -> str:
+    return re.sub(r"\D", "", s)
+
+
+def ats_report(text: str, profile: dict, headings: list[str] | None = None) -> list[str]:
+    """Problems an applicant tracking system would hit in the PDF's extracted text. Empty list means clean."""
+    problems = []
+    if profile["name"] not in text:
+        problems.append("name not found as text")
+    if profile["email"] not in text:
+        problems.append("email not found as text")
+    phone = profile.get("phone") or ""
+    if _digits(phone) and _digits(phone) not in _digits(text):
+        problems.append("phone not found as text")
+    if "(cid:" in text or "�" in text:
+        problems.append("broken glyphs in text ((cid:) or U+FFFD): a font did not map to text")
+    lines = [line.strip() for line in text.splitlines()]
+    pos = -1
+    for h in headings or []:
+        try:
+            at = lines.index(h, pos + 1)
+        except ValueError:
+            problems.append(f"heading {h} missing" if h not in lines else f"heading {h} out of order")
+            continue
+        pos = at
+    return problems
+
+
+_STOPWORDS = set("""a about above after all also an and any are as at be been being but by can could do does each for from had
+has have how if in into is it its may more most must no not of on or our out over should so such than that the their them
+then there these they this those to up us use used using was we were what when where which while who will with within would
+you your years year experience work working team role strong ability skills including etc plus job company candidate""".split())
+
+
+def keyword_report(posting: str, resume_text: str, limit: int = 25) -> tuple[list[str], list[str]]:
+    """Terms the posting repeats, split into those present in the resume text and those absent. Report only."""
+    words = re.findall(r"[a-z][a-z0-9+#.]*[a-z0-9+#]|[a-z]", posting.lower())
+    counts: dict[str, int] = {}
+    for w in words:
+        if len(w) >= 3 and w not in _STOPWORDS:
+            counts[w] = counts.get(w, 0) + 1
+    ranked = sorted((w for w, n in counts.items() if n >= 2), key=lambda w: (-counts[w], w))[:limit]
+    low = resume_text.lower()
+    found = [w for w in ranked if w in low]
+    return found, [w for w in ranked if w not in low]

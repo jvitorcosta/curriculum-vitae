@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from cv import ask, pay
-from cv.build import ToolMissing, build_outputs, pdf_text, split_front_matter
+from cv.build import ToolMissing, ats_report, build_outputs, keyword_report, pdf_text, resume_headings, split_front_matter
 from cv.funnel import BY, funnel, median_days_to_yield, render_funnel
 from cv.history import blocks, find_matches
 from cv.meta import MetaError, load_meta, save_meta, set_status
@@ -96,12 +96,23 @@ def cmd_build(args: argparse.Namespace) -> int:
         return 1
     for path in outputs:
         print(path)
+    folder = Path(args.folder)
+    resume_md = (folder / "resume.md").read_text(encoding="utf-8") if (folder / "resume.md").exists() else ""
+    failed = False
     for pdf in (p for p in outputs if p.suffix == ".pdf"):
         text = pdf_text(pdf)
-        if profile["name"] not in text or profile["email"] not in text:
-            print(f"{pdf.name}: PDF text not extractable - ATS would fail", file=sys.stderr)
-            return 1
-    return 0
+        headings = resume_headings(resume_md) if "_Resume_" in pdf.name else None
+        for problem in ats_report(text, profile, headings):
+            print(f"{pdf.name}: {problem} - ATS would fail", file=sys.stderr)
+            failed = True
+        if args.keywords and "_Resume_" in pdf.name:
+            posting = Path(args.keywords)
+            if not posting.is_absolute() and not posting.exists():
+                posting = folder / posting
+            found, absent = keyword_report(posting.read_text(encoding="utf-8"), text)
+            print(f"keywords found: {', '.join(found) or '-'}")
+            print(f"keywords absent (report only, add only what main/ backs): {', '.join(absent) or '-'}")
+    return 1 if failed else 0
 
 
 def _brl(v) -> str:
@@ -396,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("build", help="export resume and cover letter to PDF and DOCX")
     p.add_argument("folder")
+    p.add_argument("--keywords", metavar="POSTING", help="job.md (or any text file): report which posting terms the resume text has or lacks")
     p.set_defaults(func=cmd_build)
 
     p = sub.add_parser("pay", help="convert an offer to monthly net, or a target net to gross")
