@@ -20,6 +20,7 @@ from cv.history import blocks, find_matches
 from cv.meta import MetaError, load_meta, save_meta, set_status
 from cv.profile import load_profile
 from cv.scaffold import new_application
+from cv.scan import scan as scan_posting
 from cv.tracker import collect, render_tracker
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +72,32 @@ def cmd_tracker(args: argparse.Namespace) -> int:
     print(text.splitlines()[2])
     for e in errors:
         print(f"needs fixing: {e}", file=sys.stderr)
+    return 0
+
+
+def cmd_scan(args: argparse.Namespace) -> int:
+    try:
+        if args.file == "-":
+            raw = sys.stdin.read()
+        else:
+            raw = Path(args.file).read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        print(f"Cannot read {args.file}: {e}", file=sys.stderr)
+        return 1
+    result = scan_posting(raw)
+    if not result["text"].strip():
+        print("No text to evaluate.", file=sys.stderr)
+        return 1
+    if args.out:
+        out = Path(args.out).resolve()
+        root = ROOT.resolve()
+        if out == root or root in out.parents:
+            print("--out must be outside the repo (postings may hold private notes).", file=sys.stderr)
+            return 2
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(result["text"] + "\n", encoding="utf-8")
+    print(f"verdict: {result['verdict']} ({len(result['findings'])} findings)", file=sys.stderr)
+    print(json.dumps({"verdict": result["verdict"], "findings": result["findings"]}, indent=2))
     return 0
 
 
@@ -439,6 +466,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("company")
     p.add_argument("role", nargs="?", default="")
     p.set_defaults(func=cmd_seen)
+
+    p = sub.add_parser(
+        "scan",
+        help="check a saved posting for hidden or planted text (advisory)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Scan a saved job posting (HTML or text, a file or - for stdin) for text a reader would not see: "
+            "hidden HTML blocks, invisible characters, Unicode tag characters (decoded), instruction-shaped lines "
+            "aimed at an AI (quoted, never removed), words mixing Latin with Cyrillic or Greek, and URLs found only "
+            "in hidden content. Prints a verdict on stderr and the findings as JSON on stdout. It advises and never "
+            "blocks: exit 0 when it evaluated text, 1 when there was none, 2 for an unsafe --out.\n\n"
+            "Chrome's page text already drops display:none content, so the hidden-HTML check matters for raw HTML; "
+            "the invisible-character, mixed-script and instruction checks matter for both raw HTML and page text."
+        ),
+    )
+    p.add_argument("file", help="posting file, or - for stdin")
+    p.add_argument("--out", help="write the cleaned visible text here (must be outside the repo)")
+    p.set_defaults(func=cmd_scan)
 
     p = sub.add_parser("funnel", help="which channels, score bands and company types yield replies")
     p.add_argument("--by", choices=BY, default="channel")
