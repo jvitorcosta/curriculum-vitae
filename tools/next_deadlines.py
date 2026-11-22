@@ -3,15 +3,31 @@
 Prints nothing when the file is missing (fresh clones have no private/ folder).
 """
 
+import re
 import sys
+from datetime import date, datetime
 from pathlib import Path
 
 UPCOMING = Path(__file__).resolve().parents[1] / "private" / "upcoming.md"
 MAX_ROWS = 8
+URGENT_DAYS = 7
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
-def rows(text: str) -> list[str]:
+def flag(when: str, today: date) -> str:
+    """'overdue' for a passed date, 'urgent' for today through 7 days ahead, else ''."""
+    m = DATE.search(when)
+    if not m:
+        return ""
+    days = (datetime.strptime(m.group(), "%Y-%m-%d").date() - today).days
+    if days < 0:
+        return "overdue"
+    return "urgent" if days <= URGENT_DAYS else ""
+
+
+def rows(text: str, today: date | None = None) -> list[str]:
     """'When | Company | What' for each table row, skipping headers and separators."""
+    today = today or date.today()
     out = []
     for line in text.splitlines():
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
@@ -20,7 +36,11 @@ def rows(text: str) -> list[str]:
         if cells[0] in ("When (Manaus)", "Due"):
             continue
         what = cells[3] if len(cells[3]) <= 90 else cells[3][:87] + "..."
-        out.append(f"- {cells[0]} | {cells[1]} | {what}")
+        when = cells[0]
+        state = flag(when, today)
+        if state:
+            when = f"{when.replace('(overdue)', '').strip()} [{state.upper()}]"
+        out.append(f"- {when} | {cells[1]} | {what}")
     return out
 
 
