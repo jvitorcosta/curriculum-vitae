@@ -97,6 +97,21 @@ def pdf_text(path: Path) -> str:
     return "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
 
 
+MAX_RESUME_PAGES = 2
+
+
+def page_count(path: Path) -> int:
+    return len(PdfReader(path).pages)
+
+
+def overflow_warning(pages: int, limit: int = MAX_RESUME_PAGES) -> str | None:
+    """A warning line when the resume is over its page limit, else None. Advisory: the build still succeeds."""
+    if pages <= limit:
+        return None
+    return (f"resume is {pages} pages, limit {limit}: cut the lowest-scoring lines "
+            "(relevance, uniqueness, cover letter need), not the oldest")
+
+
 def resume_headings(resume_md: str) -> list[str]:
     """The `## ` section headings of a resume source, as they appear in its PDF (translated for lang: pt)."""
     front, body = split_front_matter(resume_md)

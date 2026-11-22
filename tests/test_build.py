@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cv.build import ats_report, build_outputs, compose_document, keyword_report, pdf_text, resume_headings
+from cv.build import ats_report, build_outputs, compose_document, keyword_report, overflow_warning, pdf_text, resume_headings
 from cv.scaffold import new_application
 
 needs_tools = pytest.mark.skipif(not shutil.which("pandoc") or not shutil.which("typst"),
@@ -114,3 +114,8 @@ def test_built_pdf_passes_ats_report(tmp_path):
     (d / "resume.md").write_text(md, encoding="utf-8")
     pdf = next(p for p in build_outputs(d, PROFILE, TEMPLATES) if p.suffix == ".pdf")
     assert ats_report(pdf_text(pdf), PROFILE, resume_headings(md)) == []
+
+
+def test_overflow_warning_only_above_limit():
+    assert overflow_warning(2) is None
+    assert "3 pages" in overflow_warning(3) and "not the oldest" in overflow_warning(3)

@@ -15,7 +15,8 @@ This repo is public. Everything personal lives in `private/`, a separate private
 ## Tailoring rules
 
 - Every claim must trace to `main/`. Rewording, reordering and re-emphasis are fine. New metrics, tools, responsibilities, titles or dates are not.
-- Markdown shape that renders well: each role as `### Company · Title` with a `Location · Start – End` line under it, then bullets. Lines that must stay separate (skill tiers, certificates) need a blank line between them or must be bullets, because single line breaks merge into one paragraph. A full resume from `main/` fits in 2 pages, so cut older or weaker bullets first.
+- Markdown shape that renders well: each role as `### Company · Title` with a `Location · Start – End` line under it, then bullets. Lines that must stay separate (skill tiers, certificates) need a blank line between them or must be bullets, because single line breaks merge into one paragraph. A full resume from `main/` fits in 2 pages.
+- **Over the 2-page limit** (`cv build` warns, the public build fails): score each candidate line, cut the lowest total first. Relevance to the posting (0-2), uniqueness in the document (0-2: does another line already say it), and whether the cover letter leans on it (0-2). A line the cover letter cites stays. Age is not a score: never cut a bullet just for being old. Cutting only removes or shortens lines; claims still trace to `main/` and nothing new is added.
 - Keep standard section headings (SUMMARY, SKILLS, EXPERIENCE, PROJECTS, EDUCATION, CERTIFICATES, LANGUAGES), one column, no tables. Exports must stay ATS-readable.
 - Language: English by default. For a Portuguese posting, translate from `main/`, set `lang: pt` in the front matter (headings switch automatically), and keep the same facts.
 

@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from cv import ask, pay
-from cv.build import ToolMissing, ats_report, build_outputs, keyword_report, pdf_text, resume_headings, split_front_matter
+from cv.build import ToolMissing, ats_report, build_outputs, keyword_report, overflow_warning, page_count, pdf_text, resume_headings, split_front_matter
 from cv.funnel import BY, funnel, median_days_to_yield, render_funnel
 from cv.history import blocks, find_matches
 from cv.meta import MetaError, load_meta, save_meta, set_status
@@ -132,6 +132,10 @@ def cmd_build(args: argparse.Namespace) -> int:
         for problem in ats_report(text, profile, headings):
             print(f"{pdf.name}: {problem} - ATS would fail", file=sys.stderr)
             failed = True
+        if "_Resume_" in pdf.name:
+            warning = overflow_warning(page_count(pdf))
+            if warning:
+                print(f"{pdf.name}: {warning}", file=sys.stderr)
         if args.keywords and "_Resume_" in pdf.name:
             posting = Path(args.keywords)
             if not posting.is_absolute() and not posting.exists():
