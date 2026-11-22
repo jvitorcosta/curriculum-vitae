@@ -49,7 +49,7 @@ def main() -> None:
         raise SystemExit("ATS text check failed: " + "; ".join(problems))
     print(f"Built {pdf.name} ({pages} page{'s' if pages != 1 else ''}) and {STEM}.docx")
     if pages > 2:
-        raise SystemExit("Resume is longer than 2 pages: cut older or weaker bullets.")
+        raise SystemExit("Resume is longer than 2 pages: cut the lowest-scoring lines (see Tailoring rules), not the oldest.")
     if args.copy_to:
         shutil.copy2(pdf, args.copy_to / pdf.name)
         print(f"Copied to {args.copy_to / pdf.name}: commit and push it there.")
