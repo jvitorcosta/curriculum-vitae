@@ -34,6 +34,12 @@ def render_tracker(rows: list[Row], errors: list[MetaError]) -> str:
     for folder, m in rows:
         cells = [m.date, m.company, m.role, m.channel, m.status, f"[{folder.name}](applications/{folder.name}/)"]
         lines.append("| " + " | ".join(" ".join(c.split()).replace("|", r"\|") for c in cells) + " |")
+    drafts = [(f, m) for f, m in rows if m.status == "draft"]
+    if drafts:
+        lines += ["", "## Prepared, not submitted", "",
+                  "Never sent. Not counted as quiet or due for follow-up.", ""]
+        for folder, m in drafts:
+            lines.append(f"- {m.company} · {m.role} ([{folder.name}](applications/{folder.name}/))")
     if errors:
         lines += ["", "## Needs fixing", ""]
         lines += [f"- `{e.path.parent.name}`: {e.reason}" for e in errors]
