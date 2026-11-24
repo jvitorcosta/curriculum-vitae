@@ -37,4 +37,12 @@ Variants:
 - Built an explainability pipeline that turns each fraud alert into a reviewer-ready rationale by computing SHAP attributions and calling a Databricks-hosted foundation model through Mosaic AI Model Serving with structured prompts, producing customer- and transaction-context narratives that speed up case triage.
 - Combined SHAP and an LLM to explain every fraud alert in plain language for analysts.
 
+## Monitoring and compute: drift, LLM cost, provisioned Azure machines  [platform] [ml] [llm]
+
+Facts (per Vitor, 2026-11-24): drift monitoring on the LightGBM tree model, watching for shifts in the score and feature distributions that call for a model review; LLM cost monitoring for the explainability calls (token usage, latency); serverless compute tried first for model training, but training runs sometimes failed and the hours of training were lost, so the team moved to provisioned Azure machines (Standard DS3_v2 / DS4_v2, CPU, no GPU, since it is a tree model); benchmarked the machines for feature engineering, training and serving; rolled out in staging first, then in production. Reason for the serverless failure not recorded, no RAM figures, no thresholds; do not add numbers.
+
+Variants:
+- Set up model drift monitoring for the LightGBM fraud model, tracking shifts in score and feature distributions, plus token-usage and latency monitoring for the LLM explainability calls, rolled out in staging first and then in production.
+- Moved model training from serverless compute to provisioned Azure machines (Standard DS3_v2 / DS4_v2) after serverless runs failed mid-training, and benchmarked the machines used for feature engineering, training and serving.
+
 **Technologies and tools:** Python, SQL, PySpark, Spark, Databricks (Delta Live Tables, Asset Bundles, Unity Catalog, Mosaic AI Model Serving), MLflow, XGBoost, LightGBM, SHAP, GitHub Actions, Azure, Claude, Cursor
