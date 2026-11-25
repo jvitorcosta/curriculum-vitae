@@ -84,7 +84,9 @@ def test_seo_files(tmp_path):
     assert "<loc>https://jvitorcosta.github.io/</loc>" in sitemap
     assert "https://jvitorcosta.github.io/projects/car-cyberdeck.html" in sitemap
     assert "projects/cardeck.html" not in sitemap  # the old page only redirects
-    assert (tmp_path / "robots.txt").exists()
+    robots = (tmp_path / "robots.txt").read_text(encoding="utf-8")
+    assert "Sitemap: https://jvitorcosta.github.io/sitemap.xml" in robots
+    assert "Sitemap: https://jvitorcosta.github.io/sitemap-blog.xml" in robots  # the blog's, written by the site repo
     assert (tmp_path / ".nojekyll").exists()
 
 
