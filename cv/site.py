@@ -305,7 +305,9 @@ def build_site(root: Path, profile: dict, out: Path) -> list[Path]:
     sitemap.write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                        + "".join(f"  <url><loc>{u}</loc></url>\n" for u in urls) + "</urlset>\n", encoding="utf-8")
     robots = out / "robots.txt"
-    robots.write_text(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}/sitemap.xml\n", encoding="utf-8")
+    # sitemap-blog.xml is written by the site's own generator (jvitorcosta.github.io, the blog).
+    robots.write_text(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}/sitemap.xml\n"
+                      f"Sitemap: {SITE_URL}/sitemap-blog.xml\n", encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
     images = root / "case-studies" / "images"
     if images.is_dir():
