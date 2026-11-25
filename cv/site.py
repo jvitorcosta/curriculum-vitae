@@ -141,6 +141,41 @@ def _jobs(root: Path) -> list[dict]:
     return sorted(jobs, key=lambda j: j["start"], reverse=True)
 
 
+def _experience(root: Path) -> dict[str, list[dict]]:
+    """The public resume's EXPERIENCE bullets by company, for the site's expandable roles.
+
+    Reads resume/resume.md, so the site shows the same words as the PDF: a "### Company · Title" line
+    starts a role, a bold line on its own ("**Data platform**") starts a group, a "- " line is a bullet.
+    Roles without groups get one group with an empty heading. Dates and titles stay in jobs.json."""
+    resume = root / "resume" / "resume.md"
+    if not resume.exists():
+        return {}
+    text = resume.read_text(encoding="utf-8")
+    _, body = split_front_matter(text)
+    section = body.split("## EXPERIENCE", 1)[-1].split("\n## ", 1)[0]
+    roles: dict[str, list[dict]] = {}
+    group = None
+    for line in section.splitlines():
+        line = line.rstrip()
+        if line.startswith("### "):
+            company = line[4:].split(" · ", 1)[0].strip()
+            roles[company] = []
+            group = None
+        elif not roles:
+            continue
+        elif line.startswith("**") and line.endswith("**") and line.count("**") == 2:
+            group = {"heading": line[2:-2].strip(), "items": []}
+            roles[company].append(group)
+        elif line.startswith("- "):
+            if group is None:
+                group = {"heading": "", "items": []}
+                roles[company].append(group)
+            group["items"].append(line[2:].strip())
+        elif line.startswith("  ") and group and group["items"]:
+            group["items"][-1] += " " + line.strip()  # a wrapped bullet
+    return {c: g for c, g in roles.items() if g}
+
+
 def _case_studies(root: Path) -> list[dict]:
     studies = []
     for slug in ORDER:
@@ -251,6 +286,9 @@ def build_site(root: Path, profile: dict, out: Path) -> list[Path]:
                    for j in _jobs(root)]
     jobs_json.write_text(json.dumps(public_jobs, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     written.append(jobs_json)
+    experience_json = data / "experience.json"
+    experience_json.write_text(json.dumps(_experience(root), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    written.append(experience_json)
 
     privacy = out / "privacy.html"
     email = html.escape(profile.get("email", ""))

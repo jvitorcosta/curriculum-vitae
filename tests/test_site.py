@@ -36,6 +36,29 @@ def test_exports_public_jobs_json(tmp_path):
     assert all(len(j["start"].split()) == 2 for j in jobs)  # "Feb 2026"
 
 
+def test_exports_experience_json_from_the_public_resume(tmp_path):
+    import json
+    build_site(ROOT, PROFILE, tmp_path)
+    jobs = json.loads((tmp_path / "data" / "jobs.json").read_text(encoding="utf-8"))
+    raw = (tmp_path / "data" / "experience.json").read_text(encoding="utf-8")
+    assert raw.endswith("\n")
+    experience = json.loads(raw)
+    resume = (ROOT / "resume" / "resume.md").read_text(encoding="utf-8")
+    # Every company on the site has its bullets, and every bullet is the resume's own text.
+    assert {j["company"] for j in jobs} <= set(experience)
+    for groups in experience.values():
+        assert groups and all(set(g) == {"heading", "items"} and g["items"] for g in groups)
+        assert all(item in resume for g in groups for item in g["items"])
+    assert "phone" not in raw and "00000-0000" not in raw
+
+
+def test_experience_groups_follow_the_bold_headings():
+    from cv.site import _experience
+    roles = _experience(ROOT)
+    assert [g["heading"] for g in roles["Nubank"]][0] == "AI and LLM systems"
+    assert [g["heading"] for g in roles["Qubika"]] == [""]  # no groups in the resume: one plain list
+
+
 def test_case_pages_use_shared_stylesheet(tmp_path):
     build_site(ROOT, PROFILE, tmp_path)
     for f in (tmp_path / "projects").glob("*.html"):
