@@ -23,7 +23,7 @@ ORDER = ["car-cyberdeck", "solvedor", "resume-as-code"]
 REDIRECTS = {"cardeck": "car-cyberdeck"}
 DESCRIPTION = "Vitor Pinheiro, AI/ML engineer in Brazil (UTC-4): ML and LLM systems for fintech. Open to remote roles."
 # key, English name, Portuguese name: the same labels as the homepage (homepage/render.py).
-PALETTES = (("night", "Red Lantern", "Lanterna Vermelha"), ("nu", "Nu Purple", "Roxo Nu"))
+PALETTES = (("night", "Mandarin", "Mandarim"), ("nu", "Purpura", "Púrpura"))
 LANGS = ("en", "pt")
 # Same button as the homepage; site.js updates its text and label when the language changes.
 LANG_TOGGLE = '<button type="button" data-lang-toggle aria-label="EN > PT, switch language">EN > PT</button>'

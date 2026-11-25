@@ -18,7 +18,7 @@ def test_builds_one_page_per_case_study_and_no_index(tmp_path):
         assert '<html lang="en" class="pal-nu">' in page
         assert "&larr; Vitor" in page
         assert 'data-palette="pocket"' not in page
-        for pal, en, pt in [("night", "Red Lantern", "Lanterna Vermelha"), ("nu", "Nu Purple", "Roxo Nu")]:
+        for pal, en, pt in [("night", "Mandarin", "Mandarim"), ("nu", "Purpura", "Púrpura")]:
             assert (f'<button type="button" data-palette="{pal}" aria-label="{en}" '
                     f'data-aria-en="{en}" data-aria-pt="{pt}">') in page
         assert '<div class="box">' in page
