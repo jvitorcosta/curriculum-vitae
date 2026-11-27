@@ -38,7 +38,7 @@ São Paulo, BR (hybrid) · Sep 2022 – Jul 2026 · promoted from Intern to Engi
 
 **Machine learning and experimentation**
 
-- Translated the Lending NPV framework from Scala to Python/PySpark, unifying profitability analysis across real-time credit models (loan eligibility and real-time valuation) with distributed and single-node simulations of loan performance across 50+ product lines.
+- Co-developed the migration of the Lending NPV framework from Scala to Python/PySpark, unifying profitability analysis across real-time credit models (loan eligibility and real-time valuation) with distributed and single-node simulations of loan performance across 50+ product lines.
 - Co-designed Scala/Spark experimentation logic that randomized personal-loan offer parameters (installments, maximum principal, interest rates) on customer subsamples, reducing survivorship bias and producing 20%+ cleaner training data for credit policy decisions.
 - Engineered critical features for credit risk models, improving performance through systematic feature-importance analysis and domain-driven transformations.
 
