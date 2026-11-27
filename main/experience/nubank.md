@@ -40,8 +40,8 @@ Variants:
 Facts: simulations across 50+ product lines; co-developed the migration of the Lending NPV (valuation/evaluation) framework from Scala to Python/PySpark; simulates loan performance over time to assess credit decision profitability; supports distributed (PySpark) and single-node runs; unified NPV logic across Python lending models and services (loan eligibility, real-time loan valuation); removed duplicate implementations; built PySpark processing pipelines and automated business sanity checks.
 
 Variants:
-- Translated the Lending NPV framework from Scala to Python/PySpark, enabling unified profitability analysis across real-time credit models and services with both distributed and single-node simulations of loan performance and decision economics.
-- Standardized the Lending NPV framework by migrating it from Scala to Python, unifying evaluation logic across Python-based lending models (loan eligibility and real-time valuation) and eliminating duplicate implementations.
+- Co-developed the migration of the Lending NPV framework from Scala to Python/PySpark, enabling unified profitability analysis across real-time credit models and services with both distributed and single-node simulations of loan performance and decision economics.
+- Co-developed the migration of the Lending NPV framework from Scala to Python, unifying evaluation logic across Python-based lending models (loan eligibility and real-time valuation) and eliminating duplicate implementations.
 
 ## Personal-loan offer randomization experiments  (Mid) [ml] [data-eng]
 
